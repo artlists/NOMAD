@@ -450,12 +450,11 @@ animation: toastAnim 2.5s ease forwards;
 <body>
 <div id="app">
 
-  <!-- HEADER -->
-
-  <div class="header">
+  <!-- HEADER (hidden spacer for Telegram safe area) -->
+  <div class="header" style="visibility:hidden; pointer-events:none;">
     <div></div>
     <div class="header-right">
-      <button class="lang-btn" onclick="toggleLang()" id="langBtn">RU</button>
+      <button class="lang-btn" id="langBtn">RU</button>
     </div>
   </div>
 
