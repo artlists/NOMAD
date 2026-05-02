@@ -53,18 +53,20 @@ background: radial-gradient(ellipse 40% 20% at 50% 0%, rgba(0,0,0,0.04) 0%, tran
 pointer-events: none;
 }
 
-#app {
+#
+app {
 position: relative; z-index: 1;
 max-width: 430px; margin: 0 auto;
-padding: 180px 0 90px;
+padding: 100px 0 90px;
 min-height: 100vh;
 }
 
 /* HEADER */
 .header {
+display: none;
 padding: 16px 16px 14px;
 display: flex; align-items: center; justify-content: space-between;
-position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+position: fixed; /* top: 80px; */ left: 50%; transform: translateX(-50%);
 width: 100%; max-width: 430px; z-index: 50;
 background: rgba(255,255,255,0.98);
 border-bottom: 1px solid var(--border);
@@ -452,7 +454,7 @@ animation: toastAnim 2.5s ease forwards;
 
   <!-- HEADER -->
 
-  <div class="header">
+  <div class="header" style="display:none">
     <div></div>
     <div class="header-right">
       <button class="lang-btn" onclick="toggleLang()" id="langBtn">RU</button>
