@@ -57,17 +57,17 @@ pointer-events: none;
 #app {
 position: relative; z-index: 1;
 max-width: 430px; margin: 0 auto;
-padding: 0 0 90px;
+padding: 88px 0 90px;
 min-height: 100vh;
 }
 
 /* HEADER */
 .header {
-padding: 88px 20px 12px;
+padding: 0 20px;
 display: flex; align-items: center; justify-content: space-between;
 border-bottom: 1px solid var(–border);
-position: sticky; top: 0; z-index: 50;
-background: rgba(12,12,15,0.95);
+position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; z-index: 50;
+background: rgba(12,12,15,0.97); height: 88px;
 backdrop-filter: blur(20px);
 }
 .logo {
@@ -497,6 +497,7 @@ animation: toastAnim 2.5s ease forwards;
 <button class="btn-connect" onclick="connectWallet()" data-i18n="connectBtn">
   CONNECT WALLET
 </button>
+```
 
   </div>
 
