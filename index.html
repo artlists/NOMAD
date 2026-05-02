@@ -871,15 +871,23 @@ letter-spacing: 1px;
 
   function buildJettonTransferPayload({ amount, toAddress, walletAddress }) {
     const { Address, beginCell, toNano } = requireTonCore();
+
+    const queryId = 0;
+
+    const destination = Address.parse(toAddress);
+    const responseDestination = Address.parse(walletAddress || toAddress);
+
+    const forwardTonAmount = toNano('0.02');
+
     return beginCell()
-      .storeUint(0xf8a7ea5, 32)
-      .storeUint(0, 64)
+      .storeUint(0xf8a7ea5, 32) // transfer op
+      .storeUint(queryId, 64)
       .storeCoins(toNano(amount.toString()))
-      .storeAddress(Address.parse(toAddress))
-      .storeAddress(Address.parse(walletAddress || toAddress))
-      .storeBit(0)
-      .storeCoins(toNano('0.02'))
-      .storeBit(0)
+      .storeAddress(destination)
+      .storeAddress(responseDestination)
+      .storeBit(0) // no custom_payload
+      .storeCoins(forwardTonAmount)
+      .storeBit(0) // no forward_payload
       .endCell()
       .toBoc()
       .toString('base64');
@@ -1425,7 +1433,8 @@ async function doSend() {
           // 1. build payload for the recipient owner address
           const payload = window.walletService.buildJettonTransferPayload({
             amount,
-            toAddress: resolvedTo
+            toAddress: resolvedTo,
+            walletAddress: walletAddress
           });
 
           // 2. send transaction to YOUR jetton wallet
@@ -1436,7 +1445,7 @@ async function doSend() {
             messages: [
               {
                 address: myJettonWallet,
-                amount: toNano('0.05').toString(),
+                amount: toNano('0.06').toString(),
                 payload
               }
             ]
@@ -1449,7 +1458,7 @@ async function doSend() {
           await refreshHistoryFromChain();
           closeModal('send');
 
-          showToast('NOMAD sent');
+          showToast('NOMAD sent (on-chain)');
           tg?.HapticFeedback?.notificationOccurred('success');
 
         } catch (e) {
