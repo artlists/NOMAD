@@ -711,6 +711,155 @@ animation: toastAnim 2.5s ease forwards;
 </div>
 
 <script>
+// ===== WALLET SERVICE =====
+(function () {
+  const TONCENTER_V2 = 'https://toncenter.com/api/v2';
+  const TONCENTER_V3 = 'https://toncenter.com/api/v3';
+
+  function getTonCore() {
+    return window.tonCore || null;
+  }
+
+  function requireTonCore() {
+    const core = getTonCore();
+    if (!core || !core.Address || !core.beginCell || !core.toNano) {
+      throw new Error('tonCore not ready');
+    }
+    return core;
+  }
+
+  function waitForTonCore(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      const check = () => {
+        const core = getTonCore();
+        if (core && core.Address && core.beginCell && core.toNano) {
+          resolve(core);
+        } else if (Date.now() - start > timeout) {
+          reject(new Error('tonCore load timeout'));
+        } else {
+          setTimeout(check, 50);
+        }
+      };
+      check();
+    });
+  }
+
+  function isTestnetChain(chain) {
+    return chain === -3 || chain === '-3' || chain === 'testnet';
+  }
+
+  async function fetchJson(url, options) {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(body || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  function addressToSliceBoc(ownerAddress) {
+    const { Address, beginCell } = requireTonCore();
+    return beginCell()
+      .storeAddress(Address.parse(ownerAddress))
+      .endCell()
+      .toBoc()
+      .toString('base64');
+  }
+
+  async function getTonBalance(address) {
+    const data = await fetchJson(`${TONCENTER_V2}/getAddressInformation?address=${encodeURIComponent(address)}`);
+    const balanceNano = data?.result?.balance ?? data?.balance ?? '0';
+    return Number(balanceNano) / 1e9;
+  }
+
+  async function getJettonWalletAddress(ownerAddress, jettonMasterAddress) {
+    const { Address } = requireTonCore();
+    const ownerSlice = addressToSliceBoc(ownerAddress);
+    const data = await fetchJson(`${TONCENTER_V2}/runGetMethod`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address: jettonMasterAddress,
+        method: 'get_wallet_address',
+        stack: [['slice', ownerSlice]]
+      })
+    });
+
+    const stack = data?.result?.stack || data?.stack || [];
+    const item = stack[0];
+    const raw = item?.[1]?.bytes || item?.value?.bytes || item?.value || item?.[1];
+    if (typeof raw === 'string') {
+      try {
+        return Address.parseRaw(raw).toString();
+      } catch {
+        try {
+          return Address.parse(raw).toString();
+        } catch {}
+      }
+    }
+    throw new Error('Failed to resolve jetton wallet address');
+  }
+
+  async function getJettonBalance(ownerAddress, jettonMasterAddress) {
+    const url = new URL(`${TONCENTER_V3}/jetton/wallets`);
+    url.searchParams.set('owner_address', ownerAddress);
+    url.searchParams.set('jetton_address', jettonMasterAddress);
+    url.searchParams.set('limit', '1');
+
+    const data = await fetchJson(url.toString());
+    const wallet = data?.jetton_wallets?.[0];
+    const balanceNano = wallet?.balance ?? '0';
+    return Number(balanceNano) / 1e9;
+  }
+
+  async function syncWalletState(address, jettonMasterAddress) {
+    const [ton, nomad] = await Promise.all([
+      getTonBalance(address),
+      getJettonBalance(address, jettonMasterAddress),
+    ]);
+    return { ton, nomad };
+  }
+
+  function validateTonAddress(input) {
+    const { Address } = requireTonCore();
+    const value = (input || '').trim();
+    if (!value) throw new Error('Invalid address');
+    try {
+      return Address.parse(value).toString();
+    } catch {
+      throw new Error('Invalid address');
+    }
+  }
+
+  function buildJettonTransferPayload({ amount, toAddress, walletAddress }) {
+    const { Address, beginCell, toNano } = requireTonCore();
+    return beginCell()
+      .storeUint(0xf8a7ea5, 32)
+      .storeUint(0, 64)
+      .storeCoins(toNano(amount.toString()))
+      .storeAddress(Address.parse(toAddress))
+      .storeAddress(Address.parse(walletAddress || toAddress))
+      .storeBit(0)
+      .storeCoins(toNano('0.02'))
+      .storeBit(0)
+      .endCell()
+      .toBoc()
+      .toString('base64');
+  }
+
+  window.walletService = {
+    waitForTonCore,
+    isTestnetChain,
+    getTonBalance,
+    getJettonWalletAddress,
+    getJettonBalance,
+    syncWalletState,
+    validateTonAddress,
+    buildJettonTransferPayload,
+  };
+})();
+
 // ===== i18n =====
 const NOMAD_CONTRACT = 'EQCUm1TkLN1CYIr43xGqZ_KYSJEcAD05xllkvGGtB-8J_w24';
 
@@ -813,17 +962,6 @@ function setButtonLoading(buttonId, loading, loadingText = '...') {
   }
 }
 
-function validateTonAddress(input) {
-  const value = (input || '').trim();
-  if (!value) throw new Error(t('toastInvalidAddress'));
-  if (!Address) throw new Error('tonCore not ready yet');
-  try {
-    return Address.parse(value).toString();
-  } catch {
-    throw new Error(t('toastInvalidAddress'));
-  }
-}
-
 function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
@@ -839,22 +977,6 @@ function toggleLang() {
   tg?.HapticFeedback?.impactOccurred('light');
 }
 
-function waitForTonCore(timeout = 5000) {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      if (window.tonCore && window.tonCore.Address) {
-        resolve(window.tonCore);
-      } else if (Date.now() - start > timeout) {
-        reject(new Error('tonCore load timeout'));
-      } else {
-        setTimeout(check, 50);
-      }
-    };
-    check();
-  });
-}
-
 // ===== TELEGRAM =====
 const tg = (window.Telegram && window.Telegram.WebApp) 
   ? window.Telegram.WebApp 
@@ -868,66 +990,22 @@ if (!Address) {
   console.error('tonCore not loaded');
 }
 
-async function getJettonWalletAddress(ownerAddress) {
-  try {
-    if (!Address || !beginCell) {
-      throw new Error('tonCore not ready');
-    }
-    const ownerSlice = beginCell()
-      .storeAddress(Address.parse(ownerAddress))
-      .endCell()
-      .toBoc()
-      .toString('base64');
-    const res = await fetch('https://toncenter.com/api/v2/runGetMethod', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        address: NOMAD_CONTRACT,
-        method: 'get_wallet_address',
-        stack: [
-          ['slice', ownerSlice]
-        ]
-      })
-    });
-    const data = await res.json();
-    if (!data.result || !data.result.stack) {
-      throw new Error('Invalid response');
-    }
-    const raw = data.result.stack[0][1].bytes;
-    return Address.parseRaw(raw).toString();
-  } catch (e) {
-    console.error('Jetton wallet error:', e);
-    throw e;
-  }
-}
-
-function buildJettonTransferPayload({ amount, toAddress }) {
-  if (!Address || !beginCell || !toNano) throw new Error('tonCore not ready');
-  return beginCell()
-    .storeUint(0xf8a7ea5, 32) // op code transfer
-    .storeUint(0, 64) // query id
-    .storeCoins(toNano(amount.toString()))
-    .storeAddress(Address.parse(toAddress))
-    .storeAddress(Address.parse(walletAddress || toAddress))
-    .storeBit(0) // no custom payload
-    .storeCoins(toNano('0.02')) // forward TON
-    .storeBit(0) // no forward payload
-    .endCell()
-    .toBoc()
-    .toString('base64');
-}
-
 // ===== TON CONNECT =====
 let tonConnectUI = null;
 let walletAddress = null;
+let walletChain = null;
+let walletNetworkBlocked = false;
+let balanceSyncTimer = null;
 
 async function initTonConnect() {
   try {
-    await waitForTonCore().catch(() => {
+    const core = window.walletService?.waitForTonCore
+      ? await window.walletService.waitForTonCore().catch(() => null)
+      : null;
+    if (!core) {
       console.warn('tonCore not ready in time');
-    });
+      return;
+    }
     if (!window.TON_CONNECT_UI) {
       console.warn('TON Connect not loaded');
       return;
@@ -936,11 +1014,21 @@ async function initTonConnect() {
       manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json'
     });
     tonConnectUI.onStatusChange(wallet => {
-      if (wallet) { walletAddress = wallet.account.address; onWalletConnected(walletAddress); }
+      if (wallet) {
+        walletAddress = wallet.account.address;
+        walletChain = wallet.account.chain;
+        walletNetworkBlocked = !!window.walletService?.isTestnetChain?.(walletChain);
+        onWalletConnected(walletAddress);
+      }
       else onWalletDisconnected();
     });
     const wallet = tonConnectUI.wallet;
-    if (wallet) { walletAddress = wallet.account.address; onWalletConnected(walletAddress); }
+    if (wallet) {
+      walletAddress = wallet.account.address;
+      walletChain = wallet.account.chain;
+      walletNetworkBlocked = !!window.walletService?.isTestnetChain?.(walletChain);
+      onWalletConnected(walletAddress);
+    }
   } catch(e) { console.error('TON Connect init error:', e); }
 }
 
@@ -968,12 +1056,17 @@ function onWalletConnected(addr) {
   document.getElementById('receiveAddr').textContent = addr;
   drawQR(addr);
   loadWalletState();
+  startBalanceSync();
   renderTx();
   renderCommunity();
   updateRefLink(addr);
+  if (walletNetworkBlocked) {
+    showToast('Testnet wallet connected - sending disabled');
+  }
   if (!localStorage.getItem('nomad_onboard')) {
     localStorage.setItem('nomad_onboard', '1');
-    const s = getWState();
+    let s = getWState();
+    s.demoBonusNomad = (Number(s.demoBonusNomad) || 0) + 100;
     s.nomad += 100;
     saveWState(s);
     setTimeout(() => showToast(t('toastWelcome')), 800);
@@ -985,6 +1078,33 @@ function onWalletDisconnected() {
   document.getElementById('connectScreen').style.display = 'flex';
   document.getElementById('walletScreen').style.display = 'none';
   document.getElementById('bottomNav').style.display = 'none';
+  walletChain = null;
+  walletNetworkBlocked = false;
+  if (balanceSyncTimer) {
+    clearInterval(balanceSyncTimer);
+    balanceSyncTimer = null;
+  }
+}
+
+async function syncWalletFromChain() {
+  if (!walletAddress || !window.walletService?.syncWalletState || walletNetworkBlocked) return;
+  try {
+    const onChain = await window.walletService.syncWalletState(walletAddress, NOMAD_CONTRACT);
+    const s = getWState();
+    if (Number.isFinite(onChain.ton)) s.ton = onChain.ton;
+    const demoBonus = Number(s.demoBonusNomad || 0);
+    if (Number.isFinite(onChain.nomad)) s.nomad = onChain.nomad + demoBonus;
+    saveWState(s);
+    updateBalanceUI(s);
+  } catch (e) {
+    console.warn('Balance sync failed:', e);
+  }
+}
+
+function startBalanceSync() {
+  if (balanceSyncTimer) clearInterval(balanceSyncTimer);
+  syncWalletFromChain();
+  balanceSyncTimer = setInterval(syncWalletFromChain, 30000);
 }
 
 // ===== STATE =====
@@ -1114,9 +1234,32 @@ async function doSend() {
 
     let resolvedTo;
     try {
-      resolvedTo = validateTonAddress(to);
+      resolvedTo = window.walletService?.validateTonAddress?.(to);
     } catch (e) {
       showToast(e?.message || t('toastInvalidAddress'));
+      return;
+    }
+    if (!resolvedTo) {
+      showToast(t('toastInvalidAddress'));
+      return;
+    }
+
+    if (walletNetworkBlocked) {
+      showToast('Testnet wallet connected - sending disabled');
+      return;
+    }
+
+    await syncWalletFromChain();
+    const liveState = getWState();
+    s = liveState;
+    const feeReserve = 0.06;
+
+    if (token === 'ton' && liveState.ton < amount + feeReserve) {
+      showToast(t('toastNoTon'));
+      return;
+    }
+    if (token === 'nomad' && liveState.ton < feeReserve) {
+      showToast(t('toastNoTon'));
       return;
     }
 
@@ -1156,13 +1299,13 @@ async function doSend() {
       if (token === 'nomad' && tonConnectUI && walletAddress) {
         try {
           // 1. build payload for the recipient owner address
-          const payload = buildJettonTransferPayload({
+          const payload = window.walletService.buildJettonTransferPayload({
             amount,
             toAddress: resolvedTo
           });
 
           // 2. send transaction to YOUR jetton wallet
-          const myJettonWallet = await getJettonWalletAddress(walletAddress);
+          const myJettonWallet = await window.walletService.getJettonWalletAddress(walletAddress, NOMAD_CONTRACT);
 
           await tonConnectUI.sendTransaction({
             validUntil: Math.floor(Date.now() / 1000) + 60,
