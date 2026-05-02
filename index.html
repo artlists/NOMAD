@@ -56,15 +56,15 @@ pointer-events: none;
 #app {
 position: relative; z-index: 1;
 max-width: 430px; margin: 0 auto;
-padding: 110px 0 90px;
+padding: 180px 0 90px;
 min-height: 100vh;
 }
 
 /* HEADER */
 .header {
-padding: 18px 16px 14px;
+padding: 16px 16px 14px;
 display: flex; align-items: center; justify-content: space-between;
-position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
 width: 100%; max-width: 430px; z-index: 50;
 background: rgba(255,255,255,0.98);
 border-bottom: 1px solid var(--border);
@@ -94,7 +94,7 @@ cursor: pointer; transition: all 0.2s;
 display: flex; flex-direction: column;
 align-items: center; justify-content: center;
 min-height: calc(100vh - 120px);
-padding: 40px 24px 20px;
+padding: 90px 24px 20px;
 text-align: center;
 }
 .connect-glyph {
@@ -204,6 +204,97 @@ margin-bottom: 10px;
 font-family: var(--mono); font-size: 10px;
 letter-spacing: 2px; color: var(--muted);
 text-transform: uppercase;
+}
+
+/* ECONOMY */
+.economy-panel {
+margin: 12px 16px 0;
+border: 1px solid var(--border);
+border-radius: 18px;
+padding: 14px;
+background: var(--surface);
+}
+.economy-head {
+display: flex;
+align-items: center;
+justify-content: space-between;
+margin-bottom: 12px;
+}
+.economy-pill {
+font-family: var(--mono);
+font-size: 10px;
+letter-spacing: 1px;
+border: 1px solid var(--border);
+border-radius: 999px;
+padding: 6px 10px;
+color: var(--text);
+background: var(--surface2);
+}
+.economy-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+margin-bottom: 10px;
+}
+.economy-card {
+border: 1px solid var(--border);
+border-radius: 14px;
+padding: 12px;
+background: var(--surface2);
+}
+.economy-label {
+font-family: var(--mono);
+font-size: 9px;
+letter-spacing: 2px;
+text-transform: uppercase;
+color: var(--muted);
+margin-bottom: 6px;
+}
+.economy-value {
+font-family: var(--mono);
+font-size: 18px;
+font-weight: 700;
+color: var(--text);
+margin-bottom: 4px;
+}
+.economy-desc {
+font-size: 11px;
+color: var(--muted);
+line-height: 1.4;
+}
+.invite-row {
+display: flex;
+flex-direction: column;
+gap: 8px;
+margin-top: 10px;
+}
+.invite-link {
+font-family: var(--mono);
+font-size: 11px;
+line-height: 1.4;
+padding: 10px 12px;
+border: 1px solid var(--border);
+border-radius: 12px;
+background: var(--surface2);
+word-break: break-all;
+cursor: pointer;
+}
+.challenge-line {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 10px 0;
+border-top: 1px solid var(--border);
+font-size: 12px;
+}
+.challenge-line:first-of-type {
+border-top: none;
+padding-top: 0;
+}
+.challenge-meta {
+color: var(--muted);
+font-size: 11px;
+margin-top: 2px;
 }
 
 /* TX LIST */
@@ -408,6 +499,43 @@ animation: toastAnim 2.5s ease forwards;
     <div class="action-btn" onclick="openModal('swap')">
       <div class="action-icon">⇄</div>
       <div class="action-label" data-i18n="swap">Swap</div>
+    </div>
+  </div>
+
+  <div class="economy-panel">
+    <div class="economy-head">
+      <div class="section-title" data-i18n="economy">// Economy</div>
+      <div class="economy-pill"><span id="eNomadBal">0</span> NOMAD</div>
+    </div>
+    <div class="economy-grid">
+      <div class="economy-card">
+        <div class="economy-label" data-i18n="challenge">Challenge</div>
+        <div class="economy-value" id="challengeCount">0/3</div>
+        <div class="economy-desc" data-i18n="challengeDesc">Complete 3 on-chain actions to unlock the first reward.</div>
+      </div>
+      <div class="economy-card">
+        <div class="economy-label" data-i18n="invite">Invite</div>
+        <div class="economy-value" id="inviteBonus">+50</div>
+        <div class="economy-desc" data-i18n="inviteDesc">Each invite gives a bonus when they connect.</div>
+      </div>
+    </div>
+    <div class="challenge-line">
+      <div>
+        <div data-i18n="dailySend">Daily send</div>
+        <div class="challenge-meta" id="dailySendMeta">0 / 1</div>
+      </div>
+      <div class="economy-pill" id="dailySendReward">+10</div>
+    </div>
+    <div class="challenge-line">
+      <div>
+        <div data-i18n="swapMove">Swap move</div>
+        <div class="challenge-meta" id="swapMoveMeta">0 / 1</div>
+      </div>
+      <div class="economy-pill" id="swapMoveReward">+15</div>
+    </div>
+    <div class="invite-row">
+      <div class="invite-link" id="refLink" onclick="copyRef()">t.me/nomad_wallet_bot?start=...</div>
+      <button class="btn-small" onclick="copyRef()" data-i18n="copyLink">COPY INVITE</button>
     </div>
   </div>
 
@@ -664,6 +792,14 @@ const i18n = {
     send: 'Send', receive: 'Receive', swap: 'Swap',
     history: '// History',
     wallet: 'Wallet',
+    economy: '// Economy',
+    challenge: 'Challenge',
+    challengeDesc: 'Complete 3 on-chain actions to unlock the first reward.',
+    invite: 'Invite',
+    inviteDesc: 'Each invite gives a bonus when they connect.',
+    dailySend: 'Daily send',
+    swapMove: 'Swap move',
+    copyLink: 'COPY INVITE',
     recipient: 'Recipient (@username or address)',
     amount: 'Amount', confirmWallet: 'CONFIRM IN WALLET',
     cancel: 'cancel', close: 'close',
@@ -687,6 +823,14 @@ const i18n = {
     send: 'Отправить', receive: 'Получить', swap: 'Обмен',
     history: '// История',
     wallet: 'Кошелёк',
+    economy: '// Экономика',
+    challenge: 'Челлендж',
+    challengeDesc: 'Сделай 3 on-chain действия и открой первый reward.',
+    invite: 'Инвайт',
+    inviteDesc: 'За каждый инвайт есть бонус после подключения.',
+    dailySend: 'Daily send',
+    swapMove: 'Swap move',
+    copyLink: 'СКОПИРОВАТЬ ИНВАЙТ',
     recipient: 'Получатель (@username или адрес)',
     amount: 'Сумма', confirmWallet: 'ПОДТВЕРДИТЬ В КОШЕЛЬКЕ',
     cancel: 'отмена', close: 'закрыть',
@@ -831,6 +975,8 @@ function onWalletConnected(addr) {
   loadWalletState();
   startBalanceSync();
   renderTx();
+  updateRefLink(addr);
+  updateEconomyUI(getWState());
   if (walletNetworkBlocked) {
     showToast('Testnet wallet connected - sending disabled');
   }
@@ -891,6 +1037,17 @@ function updateBalanceUI(s) {
   document.getElementById('nomadBal').textContent = s.nomad;
   document.getElementById('tonBal').textContent = s.ton.toFixed(2);
   document.getElementById('eNomadBal').textContent = s.nomad;
+  updateEconomyUI(s);
+}
+
+function updateEconomyUI(s) {
+  const actions = Number(s.actions || 0);
+  const dailySendDone = Number(s.dailySendDone || 0);
+  const swapMoveDone = Number(s.swapMoveDone || 0);
+  document.getElementById('challengeCount').textContent = `${Math.min(actions, 3)}/3`;
+  document.getElementById('dailySendMeta').textContent = `${dailySendDone} / 1`;
+  document.getElementById('swapMoveMeta').textContent = `${swapMoveDone} / 1`;
+  document.getElementById('inviteBonus').textContent = `+${Number(s.inviteBonus || 50)}`;
 }
 
 // ===== TX =====
@@ -925,6 +1082,17 @@ function renderTx() {
     `;
     list.appendChild(item);
   });
+}
+
+function updateRefLink(addr) {
+  const uid = tg?.initDataUnsafe?.user?.id || addr.slice(3,9);
+  document.getElementById('refLink').textContent = `t.me/nomad_wallet_bot?start=${uid}`;
+}
+
+function copyRef() {
+  navigator.clipboard?.writeText(document.getElementById('refLink').textContent).catch(()=>{});
+  showToast(t('copyLink'));
+  tg?.HapticFeedback?.impactOccurred('light');
 }
 
 function copyAddress() {
@@ -1001,6 +1169,8 @@ async function doSend() {
 
         // update local UI after success
         s.ton = Math.max(0, +(s.ton - amount).toFixed(6));
+        s.actions = (Number(s.actions) || 0) + 1;
+        s.dailySendDone = 1;
 
         s.txs = s.txs || [];
         s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${amount} TON`, type:'out' });
@@ -1043,6 +1213,8 @@ async function doSend() {
 
           // update UI after success
           s.nomad = Math.max(0, s.nomad - Math.floor(amount));
+          s.actions = (Number(s.actions) || 0) + 1;
+          s.dailySendDone = 1;
           s.txs = s.txs || [];
           s.txs.push({ avatar:'⬡', name:to, date:'just now', amount:`-${amount} NOMAD`, type:'out' });
 
@@ -1075,6 +1247,8 @@ async function doSend() {
 
       if (token === 'ton') s.ton = Math.max(0, +(s.ton - amount).toFixed(6));
       else s.nomad = Math.max(0, s.nomad - Math.floor(amount));
+      s.actions = (Number(s.actions) || 0) + 1;
+      if (token === 'ton') s.dailySendDone = 1;
 
       const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
       s.txs = s.txs || [];
@@ -1108,6 +1282,8 @@ function doSwap() {
     if (s.ton < from) { showToast(t('toastNoTon')); return; }
     s.ton = +(s.ton - from).toFixed(2);
     s.nomad += Math.floor(from * 238);
+    s.actions = (Number(s.actions) || 0) + 1;
+    s.swapMoveDone = 1;
     s.txs = s.txs || [];
     s.txs.push({ avatar:'⇄', name:'Swap TON→NOMAD', date:'just now', amount:`+${Math.floor(from*238)} NOMAD`, type:'in' });
     saveWState(s); renderTx(); closeModal('swap');
