@@ -1369,6 +1369,19 @@ const SWAP_STON_SDK_IMPORT = 'https://esm.sh/@ston-fi/sdk@2.5.0?bundle';
 let swapEngine = null;
 let swapEnginePromise = null;
 let swapQuoteTimer = null;
+let swapQuoteSeq = 0;
+let latestSwapQuote = null;
+
+function validateSwapRoute(simulation) {
+  if (!simulation) throw new Error('No swap route');
+  if (!simulation.router?.address) throw new Error('Invalid router');
+  if (!simulation.offerAddress || !simulation.askAddress) throw new Error('Unsupported swap pair');
+  return true;
+}
+
+function isNomadRouteValid(simulation) {
+  return simulation?.askAddress === NOMAD_CONTRACT;
+}
 
 class SwapStateMachine {
   constructor() {
@@ -1400,8 +1413,11 @@ class QuoteService {
       slippageTolerance: '0.01',
       offerUnits,
     });
+    validateSwapRoute(simulation);
 
     return {
+      quoteId: Date.now(),
+      amount: Number(amount),
       simulation,
       expectedOut: Number(simulation.minAskUnits || 0) / Math.pow(10, 9),
       offerUnits,
@@ -1436,6 +1452,7 @@ class ExecutionService {
   async execute({ walletAddress, quote }) {
     if (!walletAddress) throw new Error('Wallet not connected');
     if (!this.tonConnectUI) throw new Error('TON Connect not ready');
+    validateSwapRoute(quote?.simulation);
     const { Client, dexFactory } = await import(SWAP_STON_SDK_IMPORT);
     const routerInfo = quote.simulation.router;
     const tonApiClient = new Client({
@@ -1483,10 +1500,16 @@ class SwapEngine {
     this.state.set('quoted', quote);
     return quote;
   }
-  async execute({ amount, walletAddress, slippage = 0.01 }) {
-    const quote = await this.getQuote({ amount, walletAddress });
+  async execute({ amount, walletAddress, quote, quoteId, slippage = 0.01 }) {
+    if (!quote) {
+      quote = await this.getQuote({ amount, walletAddress });
+      quoteId = quote.quoteId;
+    }
+    if (quoteId && quote.quoteId !== quoteId) {
+      throw new Error('Stale quote');
+    }
     const minOut = this.slippageService.apply(quote.expectedOut, slippage);
-    this.state.set('pending', { quote, minOut });
+    this.state.set('broadcasting', { quote, minOut });
     const result = await this.executionService.execute({ walletAddress, quote, minOut });
     this.state.set('submitted', result);
     return { result, quote, minOut };
@@ -1533,23 +1556,34 @@ function bindSwapEngineTonConnect() {
 
 async function updateSwapPreview() {
   const swapTo = document.getElementById('swapTo');
+  const swapBtn = document.getElementById('swapBtn');
   const from = parseFloat(document.getElementById('swapFrom').value);
   if (!swapTo) return;
   if (!Number.isFinite(from) || from <= 0) {
     swapTo.value = '';
+    latestSwapQuote = null;
+    if (swapBtn) swapBtn.disabled = true;
     return;
   }
   const engine = await ensureSwapEngine();
   if (!engine) {
     swapTo.value = '...';
+    latestSwapQuote = null;
+    if (swapBtn) swapBtn.disabled = true;
     return;
   }
+  const seq = ++swapQuoteSeq;
   try {
     const quote = await engine.getQuote({ amount: from, walletAddress });
+    if (seq !== swapQuoteSeq) return;
+    latestSwapQuote = quote;
     swapTo.value = Number(quote.expectedOut || 0).toFixed(2);
+    if (swapBtn) swapBtn.disabled = false;
   } catch (e) {
     console.warn('Swap quote failed:', e);
     swapTo.value = '...';
+    latestSwapQuote = null;
+    if (swapBtn) swapBtn.disabled = true;
   }
 }
 
@@ -1769,9 +1803,16 @@ async function doSwap() {
       showToast('Wallet not connected');
       return;
     }
+    if (!latestSwapQuote || latestSwapQuote.amount !== from) {
+      latestSwapQuote = await engine.getQuote({ amount: from, walletAddress });
+    }
+    if (!isNomadRouteValid(latestSwapQuote.simulation)) {
+      showToast('Route unstable');
+    }
     const execution = await engine.execute({
-      amount: from,
       walletAddress,
+      quote: latestSwapQuote,
+      quoteId: latestSwapQuote.quoteId,
       slippage: 0.01,
     });
     cache.actions = Number(cache.actions || 0) + 1;
