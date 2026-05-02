@@ -636,6 +636,9 @@ animation: toastAnim 2.5s ease forwards;
 (function () {
   const TONCENTER_V2 = 'https://toncenter.com/api/v2';
   const TONCENTER_V3 = 'https://toncenter.com/api/v3';
+  const TONAPI_V2 = 'https://tonapi.io/v2';
+  const TONAPI_EMBED = 'https://demo-embed.tonapi.io';
+  const NOMAD_DECIMALS = 9;
 
   function getTonCore() {
     return window.tonCore || null;
@@ -679,6 +682,21 @@ animation: toastAnim 2.5s ease forwards;
     return res.json();
   }
 
+  function pickNumericBalance(data) {
+    const candidates = [
+      data?.result?.balance,
+      data?.balance,
+      data?.account?.balance,
+      data?.jetton?.balance,
+      data?.jetton_wallet?.balance,
+      data?.wallet?.balance,
+      data?.data?.balance,
+      data?.data?.account?.balance,
+    ];
+    const value = candidates.find(v => v != null && v !== '');
+    return value == null ? null : value;
+  }
+
   function addressToSliceBoc(ownerAddress) {
     const { Address, beginCell } = requireTonCore();
     return beginCell()
@@ -689,9 +707,19 @@ animation: toastAnim 2.5s ease forwards;
   }
 
   async function getTonBalance(address) {
-    const data = await fetchJson(`${TONCENTER_V2}/getAddressInformation?address=${encodeURIComponent(address)}`);
-    const balanceNano = data?.result?.balance ?? data?.balance ?? '0';
-    return Number(balanceNano) / 1e9;
+    try {
+      const data = await fetchJson(`${TONCENTER_V2}/getAddressInformation?address=${encodeURIComponent(address)}`);
+      const balanceNano = pickNumericBalance(data) ?? '0';
+      return Number(balanceNano) / 1e9;
+    } catch (toncenterError) {
+      try {
+        const data = await fetchJson(`${TONAPI_EMBED}/account/${encodeURIComponent(address)}`);
+        const balanceNano = pickNumericBalance(data) ?? '0';
+        return Number(balanceNano) / 1e9;
+      } catch (tonapiError) {
+        throw tonapiError || toncenterError;
+      }
+    }
   }
 
   async function getJettonWalletAddress(ownerAddress, jettonMasterAddress) {
@@ -723,15 +751,25 @@ animation: toastAnim 2.5s ease forwards;
   }
 
   async function getJettonBalance(ownerAddress, jettonMasterAddress) {
-    const url = new URL(`${TONCENTER_V3}/jetton/wallets`);
-    url.searchParams.set('owner_address', ownerAddress);
-    url.searchParams.set('jetton_address', jettonMasterAddress);
-    url.searchParams.set('limit', '1');
+    try {
+      const url = new URL(`${TONCENTER_V3}/jetton/wallets`);
+      url.searchParams.set('owner_address', ownerAddress);
+      url.searchParams.set('jetton_address', jettonMasterAddress);
+      url.searchParams.set('limit', '1');
 
-    const data = await fetchJson(url.toString());
-    const wallet = data?.jetton_wallets?.[0];
-    const balanceNano = wallet?.balance ?? '0';
-    return Number(balanceNano) / 1e9;
+      const data = await fetchJson(url.toString());
+      const wallet = data?.jetton_wallets?.[0];
+      const balanceNano = wallet?.balance ?? '0';
+      return Number(balanceNano) / 1e9;
+    } catch (toncenterError) {
+      try {
+        const data = await fetchJson(`${TONAPI_EMBED}/jetton/${encodeURIComponent(jettonMasterAddress)}/${encodeURIComponent(ownerAddress)}`);
+        const balanceNano = pickNumericBalance(data) ?? '0';
+        return Number(balanceNano) / Math.pow(10, NOMAD_DECIMALS);
+      } catch (tonapiError) {
+        throw tonapiError || toncenterError;
+      }
+    }
   }
 
   async function syncWalletState(address, jettonMasterAddress) {
@@ -740,6 +778,78 @@ animation: toastAnim 2.5s ease forwards;
       getJettonBalance(address, jettonMasterAddress),
     ]);
     return { ton, nomad };
+  }
+
+  function normalizeHistoryItem(item, token, ownerAddress) {
+    const isJetton = token === 'jetton';
+    const decimals = isJetton ? NOMAD_DECIMALS : 9;
+    const rawAmount = item?.amount ?? item?.value ?? item?.jetton?.amount ?? item?.ton_amount ?? item?.coins ?? item?.value_raw ?? 0;
+    const amountNum = Number(rawAmount);
+    const amount = Number.isFinite(amountNum) ? amountNum / Math.pow(10, decimals) : 0;
+    const from = item?.sender?.address || item?.from || item?.source || item?.sender || '';
+    const to = item?.recipient?.address || item?.to || item?.destination || item?.receiver || '';
+    const ts = item?.timestamp || item?.utime || item?.created_at || item?.now || Math.floor(Date.now() / 1000);
+    const counterparty = (from && from === ownerAddress) ? to : from;
+    const outgoing = from && from === ownerAddress;
+    const label = isJetton ? 'NOMAD' : 'TON';
+    return {
+      avatar: isJetton ? '⬡' : '◈',
+      name: counterparty ? `${outgoing ? 'To' : 'From'} ${counterparty.slice(0, 6)}…${counterparty.slice(-4)}` : `${label} transfer`,
+      date: new Date(ts * 1000).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      amount: `${outgoing ? '-' : '+'}${amount.toFixed(isJetton ? 2 : 2)} ${label}`,
+      type: outgoing ? 'out' : 'in',
+      ts,
+    };
+  }
+
+  async function getTonHistory(address, limit = 10) {
+    const endpoints = [
+      `${TONAPI_EMBED}/account/${encodeURIComponent(address)}/history?limit=${limit}`,
+      `${TONCENTER_V3}/transactions?account=${encodeURIComponent(address)}&limit=${limit}&sort=desc`,
+    ];
+    for (const endpoint of endpoints) {
+      try {
+        const data = await fetchJson(endpoint);
+        const rows = data?.history || data?.transfers || data?.transactions || data?.items || data?.result || [];
+        return Array.isArray(rows)
+          ? rows.map(item => normalizeHistoryItem(item, 'ton', address))
+          : [];
+      } catch (e) {}
+    }
+    return [];
+  }
+
+  async function getJettonHistory(address, jettonMasterAddress, limit = 10) {
+    const endpoints = [
+      `${TONAPI_EMBED}/jetton/${encodeURIComponent(jettonMasterAddress)}/${encodeURIComponent(address)}/history?limit=${limit}`,
+      `${TONAPI_V2}/accounts/${encodeURIComponent(address)}/events?limit=${limit}`,
+    ];
+    for (const endpoint of endpoints) {
+      try {
+        const data = await fetchJson(endpoint);
+        const rows = data?.history || data?.transfers || data?.events || data?.items || data?.result || [];
+        return Array.isArray(rows)
+          ? rows.map(item => normalizeHistoryItem(item, 'jetton', address))
+          : [];
+      } catch (e) {}
+    }
+    return [];
+  }
+
+  async function getWalletHistory(address, jettonMasterAddress, limit = 10) {
+    const [ton, nomad] = await Promise.all([
+      getTonHistory(address, limit),
+      getJettonHistory(address, jettonMasterAddress, limit),
+    ]);
+    return [...ton, ...nomad]
+      .filter(Boolean)
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, limit);
   }
 
   function validateTonAddress(input) {
@@ -776,6 +886,7 @@ animation: toastAnim 2.5s ease forwards;
     getJettonWalletAddress,
     getJettonBalance,
     syncWalletState,
+    getWalletHistory,
     validateTonAddress,
     buildJettonTransferPayload,
   };
@@ -913,6 +1024,14 @@ let walletAddress = null;
 let walletChain = null;
 let walletNetworkBlocked = false;
 let balanceSyncTimer = null;
+let liveState = {
+  ton: null,
+  nomad: null,
+  txs: [],
+  loading: true,
+  historyLoading: false,
+  historyError: '',
+};
 
 async function initTonConnect() {
   try {
@@ -962,22 +1081,21 @@ async function connectWallet() {
   finally { setButtonLoading('connectBtn', false); }
 }
 
-function demoConnect() {
-  walletAddress = 'UQD' + Math.random().toString(36).slice(2,12).toUpperCase() + 'demo';
-  onWalletConnected(walletAddress);
-}
-
-function onWalletConnected(addr) {
+async function onWalletConnected(addr) {
   document.getElementById('connectScreen').style.display = 'none';
   document.getElementById('walletScreen').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
   document.getElementById('receiveAddr').textContent = addr;
   drawQR(addr);
+  liveState.historyLoading = true;
+  liveState.historyError = '';
   loadWalletState();
-  startBalanceSync();
-  renderTx();
   updateRefLink(addr);
+  updateBalanceUI();
   updateEconomyUI(getWState());
+  startBalanceSync();
+  await syncWalletFromChain();
+  await refreshHistoryFromChain();
   if (walletNetworkBlocked) {
     showToast('Testnet wallet connected - sending disabled');
   }
@@ -988,6 +1106,15 @@ function onWalletDisconnected() {
   document.getElementById('connectScreen').style.display = 'flex';
   document.getElementById('walletScreen').style.display = 'none';
   document.getElementById('bottomNav').style.display = 'none';
+  liveState = {
+    ton: null,
+    nomad: null,
+    txs: [],
+    loading: true,
+    historyLoading: false,
+    historyError: '',
+  };
+  walletAddress = null;
   walletChain = null;
   walletNetworkBlocked = false;
   if (balanceSyncTimer) {
@@ -997,48 +1124,126 @@ function onWalletDisconnected() {
 }
 
 async function syncWalletFromChain() {
-  if (!walletAddress || !window.walletService?.syncWalletState || walletNetworkBlocked) return;
+  if (!walletAddress || !window.walletService?.syncWalletState || walletNetworkBlocked) {
+    liveState.loading = false;
+    updateBalanceUI();
+    return;
+  }
   try {
+    liveState.loading = true;
+    updateBalanceUI();
     const onChain = await window.walletService.syncWalletState(walletAddress, NOMAD_CONTRACT);
-    const s = getWState();
-    if (Number.isFinite(onChain.ton)) s.ton = onChain.ton;
-    if (Number.isFinite(onChain.nomad)) s.nomad = onChain.nomad;
-    saveWState(s);
-    updateBalanceUI(s);
+    if (Number.isFinite(onChain.ton)) liveState.ton = onChain.ton;
+    if (Number.isFinite(onChain.nomad)) liveState.nomad = onChain.nomad;
+    liveState.loading = false;
+    updateBalanceUI();
   } catch (e) {
     console.warn('Balance sync failed:', e);
+    liveState.loading = false;
+    updateBalanceUI();
+  }
+}
+
+async function refreshHistoryFromChain() {
+  if (!walletAddress || !window.walletService?.getWalletHistory || walletNetworkBlocked) {
+    const cache = getCacheState();
+    liveState.txs = Array.isArray(cache.txCache) ? cache.txCache : [];
+    liveState.historyLoading = false;
+    liveState.historyError = '';
+    renderTx();
+    return;
+  }
+  liveState.historyLoading = true;
+  liveState.historyError = '';
+  renderTx();
+  try {
+    const history = await window.walletService.getWalletHistory(walletAddress, NOMAD_CONTRACT, 12);
+    liveState.txs = Array.isArray(history) ? history : [];
+    const cache = getCacheState();
+    saveCacheState({ ...cache, txCache: liveState.txs });
+  } catch (e) {
+    console.warn('History sync failed:', e);
+    liveState.historyError = e?.message || 'History unavailable';
+    const cache = getCacheState();
+    liveState.txs = Array.isArray(cache.txCache) ? cache.txCache : [];
+  } finally {
+    liveState.historyLoading = false;
+    renderTx();
   }
 }
 
 function startBalanceSync() {
   if (balanceSyncTimer) clearInterval(balanceSyncTimer);
-  syncWalletFromChain();
   balanceSyncTimer = setInterval(syncWalletFromChain, 30000);
 }
 
 // ===== STATE =====
-function getWState() {
+function getCacheState() {
   try {
     const raw = localStorage.getItem('nomad_wallet');
     if (raw) return JSON.parse(raw);
   } catch(e) {}
-  return { ton: 0, nomad: 0, txs: [] };
+  return { actions: 0, dailySendDone: 0, swapMoveDone: 0, inviteBonus: 50, txCache: [] };
+}
+
+function saveCacheState(cache) {
+  localStorage.setItem('nomad_wallet', JSON.stringify(cache));
+}
+
+function getWState() {
+  const cache = getCacheState();
+  return {
+    ...cache,
+    ton: liveState.ton,
+    nomad: liveState.nomad,
+    txs: liveState.txs,
+    loading: liveState.loading,
+    historyLoading: liveState.historyLoading,
+    historyError: liveState.historyError,
+  };
 }
 
 function saveWState(s) {
-  localStorage.setItem('nomad_wallet', JSON.stringify(s));
-  updateBalanceUI(s);
+  const cache = {
+    actions: Number(s.actions || 0),
+    dailySendDone: Number(s.dailySendDone || 0),
+    swapMoveDone: Number(s.swapMoveDone || 0),
+    inviteBonus: Number(s.inviteBonus || 50),
+    txCache: Array.isArray(s.txCache) ? s.txCache : (Array.isArray(s.txs) ? s.txs : getCacheState().txCache || []),
+  };
+  saveCacheState(cache);
+  updateEconomyUI(cache);
 }
 
-function loadWalletState() { updateBalanceUI(getWState()); }
+function loadWalletState() {
+  updateBalanceUI();
+  updateEconomyUI(getCacheState());
+  renderTx();
+}
 
-function updateBalanceUI(s) {
-  document.getElementById('balanceAmount').innerHTML = `${s.ton.toFixed(2)} <span>TON</span>`;
-  document.getElementById('balanceUsd').textContent = `≈ $${(s.ton * 5.2).toFixed(2)} USD`;
-  document.getElementById('nomadBal').textContent = s.nomad;
-  document.getElementById('tonBal').textContent = s.ton.toFixed(2);
-  document.getElementById('eNomadBal').textContent = s.nomad;
-  updateEconomyUI(s);
+function updateBalanceUI() {
+  const ton = liveState.ton;
+  const nomad = liveState.nomad;
+  const balanceAmount = document.getElementById('balanceAmount');
+  const balanceUsd = document.getElementById('balanceUsd');
+  const nomadBal = document.getElementById('nomadBal');
+  const tonBal = document.getElementById('tonBal');
+  const eNomadBal = document.getElementById('eNomadBal');
+  if (balanceAmount) {
+    balanceAmount.innerHTML = liveState.loading || ton == null ? `... <span>TON</span>` : `${ton.toFixed(2)} <span>TON</span>`;
+  }
+  if (balanceUsd) {
+    balanceUsd.textContent = liveState.loading || ton == null ? 'Loading balance...' : `≈ $${(ton * 5.2).toFixed(2)} USD`;
+  }
+  if (nomadBal) {
+    nomadBal.textContent = nomad == null ? '...' : Number(nomad).toFixed(2).replace(/\.00$/, '');
+  }
+  if (tonBal) {
+    tonBal.textContent = ton == null ? '...' : ton.toFixed(2);
+  }
+  if (eNomadBal) {
+    eNomadBal.textContent = nomad == null ? '...' : Number(nomad).toFixed(2).replace(/\.00$/, '');
+  }
 }
 
 function updateEconomyUI(s) {
@@ -1053,10 +1258,35 @@ function updateEconomyUI(s) {
 
 // ===== TX =====
 function renderTx() {
-  const s = getWState();
   const list = document.getElementById('txList');
   list.innerHTML = '';
-  const txs = (s.txs || []).slice().reverse();
+  const txs = (liveState.txs && liveState.txs.length ? liveState.txs : (getCacheState().txCache || [])).slice().reverse();
+  if (liveState.historyLoading && !txs.length) {
+    const loading = document.createElement('div');
+    loading.className = 'tx-item';
+    loading.innerHTML = `
+      <div class="tx-avatar">…</div>
+      <div class="tx-info">
+        <div class="tx-name">Loading history</div>
+        <div class="tx-date">Fetching on-chain activity</div>
+      </div>
+    `;
+    list.appendChild(loading);
+    return;
+  }
+  if (liveState.historyError && !txs.length) {
+    const error = document.createElement('div');
+    error.className = 'tx-item';
+    error.innerHTML = `
+      <div class="tx-avatar">!</div>
+      <div class="tx-info">
+        <div class="tx-name">History unavailable</div>
+        <div class="tx-date">${liveState.historyError}</div>
+      </div>
+    `;
+    list.appendChild(error);
+    return;
+  }
   if (!txs.length) {
     const empty = document.createElement('div');
     empty.className = 'tx-item';
@@ -1119,7 +1349,6 @@ async function doSend() {
       return;
     }
 
-    let s = getWState();
     if (!walletAddress) {
       showToast('Wallet not connected');
       return;
@@ -1143,14 +1372,14 @@ async function doSend() {
     }
 
     await syncWalletFromChain();
-    s = getWState();
+    const cache = getCacheState();
     const feeReserve = 0.06;
 
-    if (token === 'ton' && s.ton < amount + feeReserve) {
+    if (token === 'ton' && (liveState.ton == null || liveState.ton < amount + feeReserve)) {
       showToast(t('toastNoTon'));
       return;
     }
-    if (token === 'nomad' && s.ton < feeReserve) {
+    if (token === 'nomad' && (liveState.ton == null || liveState.ton < feeReserve)) {
       showToast(t('toastNoTon'));
       return;
     }
@@ -1168,16 +1397,11 @@ async function doSend() {
           ]
         });
 
-        // update local UI after success
-        s.ton = Math.max(0, +(s.ton - amount).toFixed(6));
-        s.actions = (Number(s.actions) || 0) + 1;
-        s.dailySendDone = 1;
-
-        s.txs = s.txs || [];
-        s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${amount} TON`, type:'out' });
-
-        saveWState(s);
-        renderTx();
+        cache.actions = Number(cache.actions || 0) + 1;
+        cache.dailySendDone = 1;
+        saveWState(cache);
+        await syncWalletFromChain();
+        await refreshHistoryFromChain();
         closeModal('send');
 
         showToast(t('toastSent'));
@@ -1212,15 +1436,11 @@ async function doSend() {
             ]
           });
 
-          // update UI after success
-          s.nomad = Math.max(0, s.nomad - Math.floor(amount));
-          s.actions = (Number(s.actions) || 0) + 1;
-          s.dailySendDone = 1;
-          s.txs = s.txs || [];
-          s.txs.push({ avatar:'⬡', name:to, date:'just now', amount:`-${amount} NOMAD`, type:'out' });
-
-          saveWState(s);
-          renderTx();
+          cache.actions = Number(cache.actions || 0) + 1;
+          cache.dailySendDone = 1;
+          saveWState(cache);
+          await syncWalletFromChain();
+          await refreshHistoryFromChain();
           closeModal('send');
 
           showToast('NOMAD sent');
@@ -1236,30 +1456,8 @@ async function doSend() {
         return;
       }
 
-      // fallback local (if TON not connected)
-      if (token === 'ton' && s.ton < amount) {
-        showToast(t('toastNoTon'));
-        return;
-      }
-      if (token === 'nomad' && s.nomad < amount) {
-        showToast(t('toastNoNomad'));
-        return;
-      }
-
-      if (token === 'ton') s.ton = Math.max(0, +(s.ton - amount).toFixed(6));
-      else s.nomad = Math.max(0, s.nomad - Math.floor(amount));
-      s.actions = (Number(s.actions) || 0) + 1;
-      if (token === 'ton') s.dailySendDone = 1;
-
-      const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
-      s.txs = s.txs || [];
-      s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${label}`, type:'out' });
-
-      saveWState(s);
-      renderTx();
-      closeModal('send');
-
-      showToast(t('toastSent'));
+      showToast('TON Connect not available');
+      return;
     }
 
     document.getElementById('sendTo').value = '';
@@ -1279,15 +1477,12 @@ function doSwap() {
   try {
     const from = parseFloat(document.getElementById('swapFrom').value);
     if (Number.isNaN(from) || from <= 0) { showToast(t('toastAmount')); return; }
-    const s = getWState();
-    if (s.ton < from) { showToast(t('toastNoTon')); return; }
-    s.ton = +(s.ton - from).toFixed(2);
-    s.nomad += Math.floor(from * 238);
-    s.actions = (Number(s.actions) || 0) + 1;
-    s.swapMoveDone = 1;
-    s.txs = s.txs || [];
-    s.txs.push({ avatar:'⇄', name:'Swap TON→NOMAD', date:'just now', amount:`+${Math.floor(from*238)} NOMAD`, type:'in' });
-    saveWState(s); renderTx(); closeModal('swap');
+    const cache = getCacheState();
+    if (liveState.ton == null || liveState.ton < from) { showToast(t('toastNoTon')); return; }
+    cache.actions = Number(cache.actions || 0) + 1;
+    cache.swapMoveDone = 1;
+    saveWState(cache);
+    closeModal('swap');
     showToast(t('toastSwapped'));
     document.getElementById('swapFrom').value = '';
     document.getElementById('swapTo').value = '';
