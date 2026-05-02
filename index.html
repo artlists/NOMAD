@@ -492,7 +492,6 @@ animation: toastAnim 2.5s ease forwards;
 <button class="btn-connect" onclick="connectWallet()">
   ПОДКЛЮЧИТЬ КОШЕЛЁК
 </button>
-```
 
   </div>
 
@@ -500,7 +499,6 @@ animation: toastAnim 2.5s ease forwards;
 
   <div id="walletScreen">
 
-```
 <!-- SCREEN: HOME -->
 <div class="screen active" id="screen-home">
 
@@ -623,7 +621,7 @@ animation: toastAnim 2.5s ease forwards;
 
   </div>
 </div>
-```
+
 
   </div><!-- /walletScreen -->
 </div><!-- /app -->
@@ -722,7 +720,7 @@ let walletAddress = null;
 async function initTonConnect() {
   try {
     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-      manifestUrl: 'https://YOUR_GITHUB.github.io/nomad/tonconnect-manifest.json',
+      manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json',
       buttonRootId: null
     });
     tonConnectUI.onStatusChange(wallet => {
