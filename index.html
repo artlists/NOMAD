@@ -100,7 +100,7 @@ font-family: var(--mono); font-size: 10px;
 color: var(--text); letter-spacing: 1px;
 cursor: pointer; transition: all 0.2s;
 position: fixed;
-top: 80px;
+top: 45px;
 right: 16px;
 pointer-events: auto;
 z-index: 999;
@@ -474,10 +474,10 @@ letter-spacing: 1px;
 
   <!-- HEADER (hidden spacer for Telegram safe area) -->
   <div class="header header-hidden">
-    <div class="header-right">
-      <button class="lang-btn" id="langBtn">RU</button>
-    </div>
+    <div class="header-right"></div>
   </div>
+
+  <button class="lang-btn" id="langBtn" onclick="toggleLang()">RU</button>
 
   <!-- CONNECT SCREEN -->
 
