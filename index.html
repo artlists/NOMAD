@@ -854,6 +854,14 @@ if (!Address) {
 
 async function getJettonWalletAddress(ownerAddress) {
   try {
+    if (!Address || !beginCell) {
+      throw new Error('tonCore not ready');
+    }
+    const ownerSlice = beginCell()
+      .storeAddress(Address.parse(ownerAddress))
+      .endCell()
+      .toBoc()
+      .toString('base64');
     const res = await fetch('https://toncenter.com/api/v2/runGetMethod', {
       method: 'POST',
       headers: {
@@ -863,7 +871,7 @@ async function getJettonWalletAddress(ownerAddress) {
         address: NOMAD_CONTRACT,
         method: 'get_wallet_address',
         stack: [
-          ["tvm.Slice", ownerAddress]
+          ['slice', ownerSlice]
         ]
       })
     });
@@ -1074,7 +1082,7 @@ async function doSend() {
     const amount = parseFloat(document.getElementById('sendAmount').value);
     const token = document.getElementById('sendToken').value;
 
-    if (!to || !amount || amount <= 0) {
+    if (!to || Number.isNaN(amount) || amount <= 0) {
       showToast(t('toastFill'));
       return;
     }
@@ -1213,7 +1221,7 @@ function doSwap() {
   setButtonLoading('swapBtn', true);
   try {
     const from = parseFloat(document.getElementById('swapFrom').value);
-    if (!from || from <= 0) { showToast(t('toastAmount')); return; }
+    if (Number.isNaN(from) || from <= 0) { showToast(t('toastAmount')); return; }
     const s = getWState();
     if (s.ton < from) { showToast(t('toastNoTon')); return; }
     s.ton = +(s.ton - from).toFixed(2);
@@ -1235,6 +1243,7 @@ function drawQR(text) {
   if (!canvas) return;
   canvas.innerHTML = '';
   if (typeof QRCode === 'undefined') {
+    console.warn('QRCode lib missing');
     canvas.textContent = text;
     return;
   }
