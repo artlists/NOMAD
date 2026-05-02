@@ -74,9 +74,10 @@ backdrop-filter: blur(10px);
 background: transparent;
 border-bottom: none;
 backdrop-filter: none;
-pointer-events: auto;
-padding: 0 16px;
-justify-content: flex-end;
+pointer-events: none;
+padding: 0;
+height: 0;
+overflow: visible;
 }
 .header-hidden .header-right {
 pointer-events: auto;
@@ -98,10 +99,12 @@ border-radius: 999px; padding: 6px 10px;
 font-family: var(--mono); font-size: 10px;
 color: var(--text); letter-spacing: 1px;
 cursor: pointer; transition: all 0.2s;
-position: relative;
-top: 28px;
+position: fixed;
+top: 80px;
+right: 16px;
 pointer-events: auto;
 z-index: 999;
+touch-action: manipulation;
 }
 .lang-btn:active { background: var(--surface2); }
 
