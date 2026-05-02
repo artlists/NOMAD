@@ -1054,6 +1054,10 @@ let liveState = {
   historyError: '',
 };
 
+window.addEventListener('error', e => {
+  console.warn('GLOBAL ERROR:', e.message);
+});
+
 async function initTonConnect() {
   try {
     const TonConnectUIClass =
@@ -1067,8 +1071,9 @@ async function initTonConnect() {
     tonConnectUI = new TonConnectUIClass({
       manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json'
     });
-    await initSwapEngine();
-    bindSwapEngineTonConnect();
+    void initSwapEngine().then(() => {
+      bindSwapEngineTonConnect();
+    }).catch(e => console.warn('Swap engine lazy init failed:', e));
     tonConnectUI.onStatusChange(wallet => {
       if (wallet) {
         walletAddress = wallet.account.address;
@@ -1093,13 +1098,15 @@ async function connectWallet() {
   if (!tonConnectUI) {
     await initTonConnect();
   }
-  bindSwapEngineTonConnect();
   if (!tonConnectUI) {
     console.warn('TON UI instance missing');
     showToast('TON Connect not available');
     setButtonLoading('connectBtn', false);
     return;
   }
+  void initSwapEngine().then(() => {
+    bindSwapEngineTonConnect();
+  }).catch(e => console.warn('Swap engine lazy init failed:', e));
   try { await tonConnectUI.openModal(); }
   catch(e) { showToast(e?.message || 'TON Connect not available'); }
   finally { setButtonLoading('connectBtn', false); }
@@ -1625,3 +1632,220 @@ async function doSend() {
       return;
     }
 
+    if (walletNetworkBlocked) {
+      showToast('Testnet wallet connected - sending disabled');
+      return;
+    }
+
+    await syncWalletFromChain();
+    const cache = getCacheState();
+    const feeReserve = 0.06;
+
+    if (token === 'ton' && (liveState.ton == null || liveState.ton < amount + feeReserve)) {
+      showToast(t('toastNoTon'));
+      return;
+    }
+    if (token === 'nomad' && (liveState.ton == null || liveState.ton < feeReserve)) {
+      showToast(t('toastNoTon'));
+      return;
+    }
+
+    // === REAL TON SEND ===
+    if (token === 'ton' && tonConnectUI && walletAddress) {
+      try {
+        await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 60,
+          messages: [
+            {
+              address: resolvedTo,
+              amount: toNano(amount.toString()).toString()
+            }
+          ]
+        });
+
+        cache.actions = Number(cache.actions || 0) + 1;
+        cache.dailySendDone = 1;
+        saveWState(cache);
+        await syncWalletFromChain();
+        await refreshHistoryFromChain();
+        closeModal('send');
+
+        showToast(t('toastSent'));
+        tg?.HapticFeedback?.notificationOccurred('success');
+        const exp = await buildExperience('send', {
+          token,
+          amount,
+          to: resolvedTo
+        });
+        saveExperience(exp);
+
+      } catch (e) {
+        console.log(e);
+        showToast(e?.message || 'Transaction failed');
+      }
+
+    } else {
+      // === REAL JETTON (NOMAD) LOGIC ===
+      if (token === 'nomad' && tonConnectUI && walletAddress) {
+        try {
+          // 1. build payload for the recipient owner address
+          const payload = window.walletService.buildJettonTransferPayload({
+            amount,
+            toAddress: resolvedTo,
+            walletAddress: walletAddress
+          });
+
+          // 2. send transaction to YOUR jetton wallet
+          const myJettonWallet = await window.walletService.getJettonWalletAddress(walletAddress, NOMAD_CONTRACT);
+
+          await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 60,
+            messages: [
+              {
+                address: myJettonWallet,
+                amount: toNano('0.06').toString(),
+                payload
+              }
+            ]
+          });
+
+          cache.actions = Number(cache.actions || 0) + 1;
+          cache.dailySendDone = 1;
+          saveWState(cache);
+          await syncWalletFromChain();
+          await refreshHistoryFromChain();
+          closeModal('send');
+
+          showToast('NOMAD sent (on-chain)');
+          tg?.HapticFeedback?.notificationOccurred('success');
+          const exp = await buildExperience('send_nomad', {
+            amount,
+            to: resolvedTo
+          });
+          saveExperience(exp);
+
+        } catch (e) {
+          console.log(e);
+          showToast(e?.message || 'Jetton transfer failed');
+        }
+
+        document.getElementById('sendTo').value = '';
+        document.getElementById('sendAmount').value = '';
+        return;
+      }
+
+      showToast('TON Connect not available');
+      return;
+    }
+
+    document.getElementById('sendTo').value = '';
+    document.getElementById('sendAmount').value = '';
+  } finally {
+    setButtonLoading('sendConfirmBtn', false);
+  }
+}
+
+// ===== SWAP =====
+document.getElementById('swapFrom').addEventListener('input', () => {
+  clearTimeout(swapQuoteTimer);
+  swapQuoteTimer = setTimeout(() => {
+    updateSwapPreview();
+  }, 250);
+});
+
+async function doSwap() {
+  setButtonLoading('swapBtn', true);
+  try {
+    const from = parseFloat(document.getElementById('swapFrom').value);
+    if (Number.isNaN(from) || from <= 0) { showToast(t('toastAmount')); return; }
+    const cache = getCacheState();
+    if (liveState.ton == null || liveState.ton < from) { showToast(t('toastNoTon')); return; }
+    const engine = await ensureSwapEngine();
+    if (!engine) {
+      showToast('Swap engine not ready');
+      return;
+    }
+    if (!walletAddress) {
+      showToast('Wallet not connected');
+      return;
+    }
+    const execution = await engine.execute({
+      amount: from,
+      walletAddress,
+      slippage: 0.01,
+    });
+    cache.actions = Number(cache.actions || 0) + 1;
+    cache.swapMoveDone = 1;
+    saveWState(cache);
+    await syncWalletFromChain();
+    await refreshHistoryFromChain();
+    closeModal('swap');
+    showToast('Swap submitted');
+    const exp = await buildExperience('swap', {
+      from,
+      route: execution?.quote?.simulation?.router?.name || 'STON.fi',
+      expected: execution?.quote?.expectedOut
+    });
+    saveExperience(exp);
+    document.getElementById('swapFrom').value = '';
+    document.getElementById('swapTo').value = '';
+  } catch (e) {
+    console.log(e);
+    showToast(e?.message || 'Swap failed');
+  } finally {
+    setButtonLoading('swapBtn', false);
+  }
+}
+
+// ===== QR =====
+function drawQR(text) {
+  const canvas = document.getElementById('qrCanvas');
+  if (!canvas) return;
+  canvas.innerHTML = '';
+  if (typeof QRCode === 'undefined') {
+    console.warn('QRCode lib missing');
+    canvas.style.fontSize = '10px';
+    canvas.style.padding = '10px';
+    canvas.textContent = text;
+    return;
+  }
+  new QRCode(canvas, {
+    text,
+    width: 168,
+    height: 168,
+    colorDark: '#0c0c0f',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+
+// ===== SCREENS =====
+function showScreen(name, el) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`screen-${name}`).classList.add('active');
+  el.classList.add('active');
+  tg?.HapticFeedback?.selectionChanged();
+}
+
+function openModal(name) {
+  document.getElementById(`modal${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.add('open');
+}
+function closeModal(name) {
+  document.getElementById(`modal${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.remove('open');
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ===== INIT =====
+applyLang();
+setTimeout(initTonConnect, 50);
+</script>
+
+</body>
+</html>
