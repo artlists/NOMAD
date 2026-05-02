@@ -7,6 +7,7 @@
 <title>NOMAD</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+<script src="https://unpkg.com/ton-core@0.53.0/dist/ton-core.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -57,7 +58,7 @@ pointer-events: none;
 #app {
 position: relative; z-index: 1;
 max-width: 430px; margin: 0 auto;
-padding: 88px 0 90px;
+padding: 178px 0 90px;
 min-height: 100vh;
 }
 
@@ -66,7 +67,7 @@ min-height: 100vh;
 padding: 0 20px;
 display: flex; align-items: center; justify-content: space-between;
 border-bottom: 1px solid var(--border);
-position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; z-index: 50;
+position: fixed; top: 90px; left: 50%; transform: translateX(-50%); width: 100%; z-index: 50;
 background: rgba(12,12,15,0.97); height: 88px;
 backdrop-filter: blur(20px);
 }
@@ -814,6 +815,36 @@ function toggleLang() {
 const tg = window.Telegram?.WebApp ?? null;
 if (tg) { tg.ready(); tg.expand(); }
 
+// ===== TON CORE HELPERS =====
+const { Address, beginCell, toNano } = tonCore;
+
+async function getJettonWalletAddress(ownerAddress) {
+  // call TON API (toncenter lite) to resolve jetton wallet
+  const res = await fetch(`https://toncenter.com/api/v2/runGetMethod?address=${NOMAD_CONTRACT}&method=get_wallet_address&stack=[[\
+    \"tvm.Slice\",\"${ownerAddress}\"\
+  ]]`);
+  const data = await res.json();
+  if (!data.result) throw new Error('Failed to get jetton wallet');
+
+  const raw = data.result.stack[0][1].bytes;
+  return Address.parseRaw(raw).toString();
+}
+
+function buildJettonTransferPayload({ amount, toAddress }) {
+  return beginCell()
+    .storeUint(0xf8a7ea5, 32) // op code transfer
+    .storeUint(0, 64) // query id
+    .storeCoins(toNano(amount.toString()))
+    .storeAddress(Address.parse(toAddress))
+    .storeAddress(Address.parse(walletAddress))
+    .storeBit(0) // no custom payload
+    .storeCoins(toNano('0.02')) // forward TON
+    .storeBit(0) // no forward payload
+    .endCell()
+    .toBoc()
+    .toString('base64');
+}
+
 // ===== TON CONNECT =====
 let tonConnectUI = null;
 let walletAddress = null;
@@ -1017,7 +1048,55 @@ async function doSend() {
     }
 
   } else {
-    // === LOCAL SIMULATION (NOMAD or fallback) ===
+    // === REAL JETTON (NOMAD) LOGIC ===
+    if (token === 'nomad' && tonConnectUI && walletAddress) {
+      try {
+        // 1. resolve recipient jetton wallet
+        const jettonWallet = await getJettonWalletAddress(to);
+
+        // 2. build payload
+        const payload = buildJettonTransferPayload({
+          amount,
+          toAddress: to
+        });
+
+        // 3. send transaction to YOUR jetton wallet
+        const myJettonWallet = await getJettonWalletAddress(walletAddress);
+
+        await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 60,
+          messages: [
+            {
+              address: myJettonWallet,
+              amount: toNano('0.05').toString(),
+              payload
+            }
+          ]
+        });
+
+        // update UI after success
+        s.nomad -= Math.floor(amount);
+        s.txs = s.txs || [];
+        s.txs.push({ avatar:'⬡', name:to, date:'just now', amount:`-${amount} NOMAD`, type:'out' });
+
+        saveWState(s);
+        renderTx();
+        closeModal('send');
+
+        showToast('NOMAD sent');
+        tg?.HapticFeedback?.notificationOccurred('success');
+
+      } catch (e) {
+        console.log(e);
+        showToast('Jetton transfer failed');
+      }
+
+      document.getElementById('sendTo').value = '';
+      document.getElementById('sendAmount').value = '';
+      return;
+    }
+
+    // fallback local (if TON not connected)
     if (token === 'ton' && s.ton < amount) {
       showToast(t('toastNoTon'));
       return;
