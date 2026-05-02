@@ -637,7 +637,7 @@ letter-spacing: 1px;
       <input class="input-field" id="swapTo" placeholder="0 NOMAD" readonly />
     </div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:14px;letter-spacing:1px">
-      1 TON = 238 NOMAD
+      Live quote from STON.fi
     </div>
     <button class="btn-primary" id="swapBtn" onclick="doSwap()" data-i18n="swapBtn">SWAP</button>
     <button class="btn-cancel" onclick="closeModal('swap')" data-i18n="cancel">cancel</button>
@@ -1067,6 +1067,8 @@ async function initTonConnect() {
     tonConnectUI = new TonConnectUIClass({
       manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json'
     });
+    await initSwapEngine();
+    bindSwapEngineTonConnect();
     tonConnectUI.onStatusChange(wallet => {
       if (wallet) {
         walletAddress = wallet.account.address;
@@ -1091,6 +1093,7 @@ async function connectWallet() {
   if (!tonConnectUI) {
     await initTonConnect();
   }
+  bindSwapEngineTonConnect();
   if (!tonConnectUI) {
     console.warn('TON UI instance missing');
     showToast('TON Connect not available');
@@ -1352,6 +1355,197 @@ function copyAddress() {
   showToast(t('toastAddrCopied'));
 }
 
+// ===== SWAP ENGINE =====
+const SWAP_STON_API = 'https://api.ston.fi';
+const SWAP_STON_API_IMPORT = 'https://esm.sh/@ston-fi/api@0.24.0?bundle';
+const SWAP_STON_SDK_IMPORT = 'https://esm.sh/@ston-fi/sdk@2.5.0?bundle';
+let swapEngine = null;
+let swapEnginePromise = null;
+let swapQuoteTimer = null;
+
+class SwapStateMachine {
+  constructor() {
+    this.state = 'idle';
+    this.data = null;
+  }
+  set(state, data = null) {
+    this.state = state;
+    this.data = data;
+    window.dispatchEvent(new CustomEvent('swap-state', {
+      detail: { state, data }
+    }));
+  }
+  get() {
+    return { state: this.state, data: this.data };
+  }
+}
+
+class QuoteService {
+  constructor(stonApi) {
+    this.stonApi = stonApi;
+  }
+
+  async getQuote({ amount, walletAddress }) {
+    const offerUnits = (Number(amount) * 1e9).toString();
+    const simulation = await this.stonApi.simulateSwap({
+      offerAddress: 'ton',
+      askAddress: NOMAD_CONTRACT,
+      slippageTolerance: '0.01',
+      offerUnits,
+    });
+
+    return {
+      simulation,
+      expectedOut: Number(simulation.minAskUnits || 0) / Math.pow(10, 9),
+      offerUnits,
+      minAskUnits: simulation.minAskUnits,
+      walletAddress,
+    };
+  }
+}
+
+class RouteService {
+  resolve(simulation) {
+    return {
+      primary: simulation?.router?.name || 'STON.fi',
+      router: simulation?.router || null,
+      path: [simulation?.offerAddress, 'STON_ROUTER', simulation?.askAddress],
+    };
+  }
+}
+
+class SlippageService {
+  apply(expectedOut, slippage = 0.01) {
+    return expectedOut * (1 - slippage);
+  }
+}
+
+class ExecutionService {
+  constructor(tonConnectUI, walletService) {
+    this.tonConnectUI = tonConnectUI;
+    this.walletService = walletService;
+  }
+
+  async execute({ walletAddress, quote }) {
+    if (!walletAddress) throw new Error('Wallet not connected');
+    if (!this.tonConnectUI) throw new Error('TON Connect not ready');
+    const { Client, dexFactory } = await import(SWAP_STON_SDK_IMPORT);
+    const routerInfo = quote.simulation.router;
+    const tonApiClient = new Client({
+      endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+    });
+    const dexContracts = dexFactory(routerInfo);
+    const router = tonApiClient.open(
+      dexContracts.Router.create(routerInfo.address)
+    );
+    const proxyTon = dexContracts.pTON.create(routerInfo.ptonMasterAddress);
+    const swapParams = await router.getSwapTonToJettonTxParams({
+      userWalletAddress: walletAddress,
+      offerAmount: quote.simulation.offerUnits,
+      minAskAmount: quote.simulation.minAskUnits,
+      proxyTon,
+      askJettonAddress: quote.simulation.askAddress,
+    });
+
+    return this.tonConnectUI.sendTransaction({
+      validUntil: Math.floor(Date.now() / 1000) + 60,
+      messages: [
+        {
+          address: swapParams.to.toString(),
+          amount: swapParams.value.toString(),
+          payload: swapParams.body?.toBoc().toString('base64'),
+        }
+      ]
+    });
+  }
+}
+
+class SwapEngine {
+  constructor({ tonConnectUI, walletService, stonApi, sdk }) {
+    this.tonConnectUI = tonConnectUI;
+    this.walletService = walletService;
+    this.quoteService = new QuoteService(stonApi);
+    this.routeService = new RouteService();
+    this.executionService = new ExecutionService(tonConnectUI, walletService);
+    this.slippageService = new SlippageService();
+    this.state = new SwapStateMachine();
+  }
+  async getQuote({ amount, walletAddress }) {
+    this.state.set('quoting');
+    const quote = await this.quoteService.getQuote({ amount, walletAddress });
+    this.state.set('quoted', quote);
+    return quote;
+  }
+  async execute({ amount, walletAddress, slippage = 0.01 }) {
+    const quote = await this.getQuote({ amount, walletAddress });
+    const minOut = this.slippageService.apply(quote.expectedOut, slippage);
+    this.state.set('pending', { quote, minOut });
+    const result = await this.executionService.execute({ walletAddress, quote, minOut });
+    this.state.set('submitted', result);
+    return { result, quote, minOut };
+  }
+}
+
+async function initSwapEngine() {
+  if (swapEngine) return swapEngine;
+  if (swapEnginePromise) return swapEnginePromise;
+  swapEnginePromise = (async () => {
+    try {
+      const { StonApiClient } = await import(SWAP_STON_API_IMPORT);
+      const stonApi = new StonApiClient();
+      swapEngine = new SwapEngine({
+        tonConnectUI,
+        walletService: window.walletService,
+        stonApi,
+        sdk: null,
+      });
+      window.swapEngine = swapEngine;
+      return swapEngine;
+    } catch (e) {
+      console.warn('Swap engine init failed:', e);
+      swapEngine = null;
+      window.swapEngine = null;
+      return null;
+    } finally {
+      swapEnginePromise = null;
+    }
+  })();
+  return swapEnginePromise;
+}
+
+async function ensureSwapEngine() {
+  if (swapEngine) return swapEngine;
+  return initSwapEngine();
+}
+
+function bindSwapEngineTonConnect() {
+  if (!swapEngine) return;
+  swapEngine.tonConnectUI = tonConnectUI;
+  swapEngine.executionService.tonConnectUI = tonConnectUI;
+}
+
+async function updateSwapPreview() {
+  const swapTo = document.getElementById('swapTo');
+  const from = parseFloat(document.getElementById('swapFrom').value);
+  if (!swapTo) return;
+  if (!Number.isFinite(from) || from <= 0) {
+    swapTo.value = '';
+    return;
+  }
+  const engine = await ensureSwapEngine();
+  if (!engine) {
+    swapTo.value = '...';
+    return;
+  }
+  try {
+    const quote = await engine.getQuote({ amount: from, walletAddress });
+    swapTo.value = Number(quote.expectedOut || 0).toFixed(2);
+  } catch (e) {
+    console.warn('Swap quote failed:', e);
+    swapTo.value = '...';
+  }
+}
+
 // ===== EXPERIENCE / IDENTITY LAYER =====
 function sha256(input) {
   const encoder = new TextEncoder();
@@ -1431,197 +1625,3 @@ async function doSend() {
       return;
     }
 
-    if (walletNetworkBlocked) {
-      showToast('Testnet wallet connected - sending disabled');
-      return;
-    }
-
-    await syncWalletFromChain();
-    const cache = getCacheState();
-    const feeReserve = 0.06;
-
-    if (token === 'ton' && (liveState.ton == null || liveState.ton < amount + feeReserve)) {
-      showToast(t('toastNoTon'));
-      return;
-    }
-    if (token === 'nomad' && (liveState.ton == null || liveState.ton < feeReserve)) {
-      showToast(t('toastNoTon'));
-      return;
-    }
-
-    // === REAL TON SEND ===
-    if (token === 'ton' && tonConnectUI && walletAddress) {
-      try {
-        await tonConnectUI.sendTransaction({
-          validUntil: Math.floor(Date.now() / 1000) + 60,
-          messages: [
-            {
-              address: resolvedTo,
-              amount: toNano(amount.toString()).toString()
-            }
-          ]
-        });
-
-        cache.actions = Number(cache.actions || 0) + 1;
-        cache.dailySendDone = 1;
-        saveWState(cache);
-        await syncWalletFromChain();
-        await refreshHistoryFromChain();
-        closeModal('send');
-
-        showToast(t('toastSent'));
-        tg?.HapticFeedback?.notificationOccurred('success');
-        const exp = await buildExperience('send', {
-          token,
-          amount,
-          to: resolvedTo
-        });
-        saveExperience(exp);
-
-      } catch (e) {
-        console.log(e);
-        showToast(e?.message || 'Transaction failed');
-      }
-
-    } else {
-      // === REAL JETTON (NOMAD) LOGIC ===
-      if (token === 'nomad' && tonConnectUI && walletAddress) {
-        try {
-          // 1. build payload for the recipient owner address
-          const payload = window.walletService.buildJettonTransferPayload({
-            amount,
-            toAddress: resolvedTo,
-            walletAddress: walletAddress
-          });
-
-          // 2. send transaction to YOUR jetton wallet
-          const myJettonWallet = await window.walletService.getJettonWalletAddress(walletAddress, NOMAD_CONTRACT);
-
-          await tonConnectUI.sendTransaction({
-            validUntil: Math.floor(Date.now() / 1000) + 60,
-            messages: [
-              {
-                address: myJettonWallet,
-                amount: toNano('0.06').toString(),
-                payload
-              }
-            ]
-          });
-
-          cache.actions = Number(cache.actions || 0) + 1;
-          cache.dailySendDone = 1;
-          saveWState(cache);
-          await syncWalletFromChain();
-          await refreshHistoryFromChain();
-          closeModal('send');
-
-          showToast('NOMAD sent (on-chain)');
-          tg?.HapticFeedback?.notificationOccurred('success');
-          const exp = await buildExperience('send_nomad', {
-            amount,
-            to: resolvedTo
-          });
-          saveExperience(exp);
-
-        } catch (e) {
-          console.log(e);
-          showToast(e?.message || 'Jetton transfer failed');
-        }
-
-        document.getElementById('sendTo').value = '';
-        document.getElementById('sendAmount').value = '';
-        return;
-      }
-
-      showToast('TON Connect not available');
-      return;
-    }
-
-    document.getElementById('sendTo').value = '';
-    document.getElementById('sendAmount').value = '';
-  } finally {
-    setButtonLoading('sendConfirmBtn', false);
-  }
-}
-
-// ===== SWAP =====
-document.getElementById('swapFrom').addEventListener('input', e => {
-  document.getElementById('swapTo').value = Math.floor((parseFloat(e.target.value)||0) * 238);
-});
-
-async function doSwap() {
-  setButtonLoading('swapBtn', true);
-  try {
-    const from = parseFloat(document.getElementById('swapFrom').value);
-    if (Number.isNaN(from) || from <= 0) { showToast(t('toastAmount')); return; }
-    const cache = getCacheState();
-    if (liveState.ton == null || liveState.ton < from) { showToast(t('toastNoTon')); return; }
-    cache.actions = Number(cache.actions || 0) + 1;
-    cache.swapMoveDone = 1;
-    saveWState(cache);
-    closeModal('swap');
-    showToast(t('toastSwapped'));
-    const exp = await buildExperience('swap', {
-      from,
-      rate: 238
-    });
-    saveExperience(exp);
-    document.getElementById('swapFrom').value = '';
-    document.getElementById('swapTo').value = '';
-  } finally {
-    setButtonLoading('swapBtn', false);
-  }
-}
-
-// ===== QR =====
-function drawQR(text) {
-  const canvas = document.getElementById('qrCanvas');
-  if (!canvas) return;
-  canvas.innerHTML = '';
-  if (typeof QRCode === 'undefined') {
-    console.warn('QRCode lib missing');
-    canvas.style.fontSize = '10px';
-    canvas.style.padding = '10px';
-    canvas.textContent = text;
-    return;
-  }
-  new QRCode(canvas, {
-    text,
-    width: 168,
-    height: 168,
-    colorDark: '#0c0c0f',
-    colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.M
-  });
-}
-
-// ===== SCREENS =====
-function showScreen(name, el) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById(`screen-${name}`).classList.add('active');
-  el.classList.add('active');
-  tg?.HapticFeedback?.selectionChanged();
-}
-
-function openModal(name) {
-  document.getElementById(`modal${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.add('open');
-}
-function closeModal(name) {
-  document.getElementById(`modal${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.remove('open');
-}
-
-function showToast(msg) {
-  const t = document.createElement('div');
-  t.className = 'toast'; t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2500);
-}
-
-// ===== INIT =====
-applyLang();
-setTimeout(initTonConnect, 50);
-</script>
-
-</body>
-</html>
