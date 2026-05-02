@@ -978,14 +978,23 @@ function toggleLang() {
 }
 
 // ===== TELEGRAM =====
-const tg = (window.Telegram && window.Telegram.WebApp) 
-  ? window.Telegram.WebApp 
+const tg = (window.Telegram && window.Telegram.WebApp)
+  ? window.Telegram.WebApp
   : null;
 if (tg) { tg.ready(); tg.expand(); }
 
 // ===== TON CORE HELPERS =====
 const tonCore = window.tonCore || {};
-const { Address, beginCell, toNano } = tonCore;
+let Address = tonCore.Address;
+let beginCell = tonCore.beginCell;
+let toNano = tonCore.toNano;
+
+// keep references updated after async load
+window.walletService?.waitForTonCore?.().then(core => {
+  Address = core.Address;
+  beginCell = core.beginCell;
+  toNano = core.toNano;
+}).catch(() => {});
 if (!Address) {
   console.error('tonCore not loaded');
 }
@@ -999,9 +1008,15 @@ let balanceSyncTimer = null;
 
 async function initTonConnect() {
   try {
-    const core = window.walletService?.waitForTonCore
-      ? await window.walletService.waitForTonCore().catch(() => null)
-      : null;
+    let core = null;
+    if (window.walletService?.waitForTonCore) {
+      try {
+        core = await window.walletService.waitForTonCore();
+      } catch (e) {
+        console.warn('tonCore not ready in time');
+        return;
+      }
+    }
     if (!core) {
       console.warn('tonCore not ready in time');
       return;
@@ -1226,7 +1241,7 @@ async function doSend() {
       return;
     }
 
-    const s = getWState();
+    let s = getWState();
     if (!walletAddress) {
       showToast('Wallet not connected');
       return;
@@ -1250,15 +1265,14 @@ async function doSend() {
     }
 
     await syncWalletFromChain();
-    const liveState = getWState();
-    s = liveState;
+    s = getWState();
     const feeReserve = 0.06;
 
-    if (token === 'ton' && liveState.ton < amount + feeReserve) {
+    if (token === 'ton' && s.ton < amount + feeReserve) {
       showToast(t('toastNoTon'));
       return;
     }
-    if (token === 'nomad' && liveState.ton < feeReserve) {
+    if (token === 'nomad' && s.ton < feeReserve) {
       showToast(t('toastNoTon'));
       return;
     }
@@ -1277,7 +1291,7 @@ async function doSend() {
         });
 
         // update local UI after success
-        s.ton = +(s.ton - amount).toFixed(2);
+        s.ton = Math.max(0, +(s.ton - amount).toFixed(6));
 
         s.txs = s.txs || [];
         s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${amount} TON`, type:'out' });
@@ -1319,7 +1333,7 @@ async function doSend() {
           });
 
           // update UI after success
-          s.nomad -= Math.floor(amount);
+          s.nomad = Math.max(0, s.nomad - Math.floor(amount));
           s.txs = s.txs || [];
           s.txs.push({ avatar:'⬡', name:to, date:'just now', amount:`-${amount} NOMAD`, type:'out' });
 
@@ -1350,8 +1364,8 @@ async function doSend() {
         return;
       }
 
-      if (token === 'ton') s.ton = +(s.ton - amount).toFixed(2);
-      else s.nomad -= Math.floor(amount);
+      if (token === 'ton') s.ton = Math.max(0, +(s.ton - amount).toFixed(6));
+      else s.nomad = Math.max(0, s.nomad - Math.floor(amount));
 
       const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
       s.txs = s.txs || [];
