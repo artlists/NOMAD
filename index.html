@@ -534,7 +534,7 @@ animation: toastAnim 2.5s ease forwards;
       <div class="economy-pill" id="swapMoveReward">+15</div>
     </div>
     <div class="invite-row">
-      <div class="invite-link" id="refLink" onclick="copyRef()">t.me/nomad_wallet_bot?start=...</div>
+      <div class="invite-link" id="refLink" onclick="copyRef()">https://t.me/walletnomadbot?start=...</div>
       <button class="btn-small" onclick="copyRef()" data-i18n="copyLink">COPY INVITE</button>
     </div>
   </div>
@@ -783,6 +783,7 @@ animation: toastAnim 2.5s ease forwards;
 
 // ===== i18n =====
 const NOMAD_CONTRACT = 'EQCUm1TkLN1CYIr43xGqZ_KYSJEcAD05xllkvGGtB-8J_w24';
+const REF_BOT_USERNAME = 'walletnomadbot';
 
 const i18n = {
   en: {
@@ -1086,7 +1087,7 @@ function renderTx() {
 
 function updateRefLink(addr) {
   const uid = tg?.initDataUnsafe?.user?.id || addr.slice(3,9);
-  document.getElementById('refLink').textContent = `t.me/nomad_wallet_bot?start=${uid}`;
+  document.getElementById('refLink').textContent = `https://t.me/${REF_BOT_USERNAME}?start=${uid}`;
 }
 
 function copyRef() {
