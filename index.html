@@ -816,7 +816,7 @@ function setButtonLoading(buttonId, loading, loadingText = '...') {
 function validateTonAddress(input) {
   const value = (input || '').trim();
   if (!value) throw new Error(t('toastInvalidAddress'));
-  if (!Address) throw new Error('tonCore not ready');
+  if (!Address) throw new Error('tonCore not ready yet');
   try {
     return Address.parse(value).toString();
   } catch {
@@ -837,6 +837,22 @@ function toggleLang() {
   localStorage.setItem('nomad_lang', lang);
   applyLang();
   tg?.HapticFeedback?.impactOccurred('light');
+}
+
+function waitForTonCore(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      if (window.tonCore && window.tonCore.Address) {
+        resolve(window.tonCore);
+      } else if (Date.now() - start > timeout) {
+        reject(new Error('tonCore load timeout'));
+      } else {
+        setTimeout(check, 50);
+      }
+    };
+    check();
+  });
 }
 
 // ===== TELEGRAM =====
@@ -894,7 +910,7 @@ function buildJettonTransferPayload({ amount, toAddress }) {
     .storeUint(0, 64) // query id
     .storeCoins(toNano(amount.toString()))
     .storeAddress(Address.parse(toAddress))
-    .storeAddress(Address.parse(walletAddress))
+    .storeAddress(Address.parse(walletAddress || toAddress))
     .storeBit(0) // no custom payload
     .storeCoins(toNano('0.02')) // forward TON
     .storeBit(0) // no forward payload
@@ -909,6 +925,9 @@ let walletAddress = null;
 
 async function initTonConnect() {
   try {
+    await waitForTonCore().catch(() => {
+      console.warn('tonCore not ready in time');
+    });
     if (!window.TON_CONNECT_UI) {
       console.warn('TON Connect not loaded');
       return;
@@ -1116,7 +1135,6 @@ async function doSend() {
 
         // update local UI after success
         s.ton = +(s.ton - amount).toFixed(2);
-        s.nomad += 5;
 
         s.txs = s.txs || [];
         s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${amount} TON`, type:'out' });
@@ -1192,8 +1210,6 @@ async function doSend() {
       if (token === 'ton') s.ton = +(s.ton - amount).toFixed(2);
       else s.nomad -= Math.floor(amount);
 
-      s.nomad += 5;
-
       const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
       s.txs = s.txs || [];
       s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${label}`, type:'out' });
@@ -1244,6 +1260,8 @@ function drawQR(text) {
   canvas.innerHTML = '';
   if (typeof QRCode === 'undefined') {
     console.warn('QRCode lib missing');
+    canvas.style.fontSize = '10px';
+    canvas.style.padding = '10px';
     canvas.textContent = text;
     return;
   }
