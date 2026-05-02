@@ -100,8 +100,8 @@ font-family: var(--mono); font-size: 10px;
 color: var(--text); letter-spacing: 1px;
 cursor: pointer; transition: all 0.2s;
 position: fixed;
-top: 60px;
-right: 80px;
+top: 62px;
+right: 85px;
 pointer-events: auto;
 z-index: 999;
 touch-action: manipulation;
@@ -1352,6 +1352,50 @@ function copyAddress() {
   showToast(t('toastAddrCopied'));
 }
 
+// ===== EXPERIENCE / IDENTITY LAYER =====
+function sha256(input) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  return crypto.subtle.digest('SHA-256', data).then(buf => {
+    return Array.from(new Uint8Array(buf))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  });
+}
+
+async function buildExperience(action, payload = {}) {
+  if (!walletAddress) return null;
+  const base = {
+    action,
+    wallet: walletAddress,
+    ts: Date.now(),
+    payload
+  };
+  const contextString =
+    base.action +
+    base.wallet +
+    JSON.stringify(base.payload) +
+    base.ts;
+  const contextId = await sha256(contextString);
+  return {
+    ...base,
+    contextId
+  };
+}
+
+function saveExperience(exp) {
+  if (!exp) return;
+  const key = 'nomad_experience';
+  let prev = [];
+  try {
+    prev = JSON.parse(localStorage.getItem(key) || '[]');
+  } catch (e) {
+    prev = [];
+  }
+  prev.push(exp);
+  localStorage.setItem(key, JSON.stringify(prev.slice(-200)));
+}
+
 // ===== SEND =====
 async function doSend() {
   setButtonLoading('sendConfirmBtn', true);
@@ -1427,6 +1471,12 @@ async function doSend() {
 
         showToast(t('toastSent'));
         tg?.HapticFeedback?.notificationOccurred('success');
+        const exp = await buildExperience('send', {
+          token,
+          amount,
+          to: resolvedTo
+        });
+        saveExperience(exp);
 
       } catch (e) {
         console.log(e);
@@ -1467,6 +1517,11 @@ async function doSend() {
 
           showToast('NOMAD sent (on-chain)');
           tg?.HapticFeedback?.notificationOccurred('success');
+          const exp = await buildExperience('send_nomad', {
+            amount,
+            to: resolvedTo
+          });
+          saveExperience(exp);
 
         } catch (e) {
           console.log(e);
@@ -1494,7 +1549,7 @@ document.getElementById('swapFrom').addEventListener('input', e => {
   document.getElementById('swapTo').value = Math.floor((parseFloat(e.target.value)||0) * 238);
 });
 
-function doSwap() {
+async function doSwap() {
   setButtonLoading('swapBtn', true);
   try {
     const from = parseFloat(document.getElementById('swapFrom').value);
@@ -1506,6 +1561,11 @@ function doSwap() {
     saveWState(cache);
     closeModal('swap');
     showToast(t('toastSwapped'));
+    const exp = await buildExperience('swap', {
+      from,
+      rate: 238
+    });
+    saveExperience(exp);
     document.getElementById('swapFrom').value = '';
     document.getElementById('swapTo').value = '';
   } finally {
