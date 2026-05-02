@@ -35,7 +35,6 @@ min-height: 100vh;
 overflow-x: hidden;
 }
 
-/* GRID BACKGROUND */
 body::before {
 content: ‘’;
 position: fixed; inset: 0; z-index: 0;
@@ -46,7 +45,6 @@ background-size: 40px 40px;
 pointer-events: none;
 }
 
-/* GLOW ORBS */
 body::after {
 content: ‘’;
 position: fixed; inset: 0; z-index: 0;
@@ -59,15 +57,18 @@ pointer-events: none;
 #app {
 position: relative; z-index: 1;
 max-width: 430px; margin: 0 auto;
-padding: 0 0 80px;
+padding: 0 0 90px;
 min-height: 100vh;
 }
 
-/* ── HEADER ── */
+/* HEADER */
 .header {
-padding: 16px 20px 12px;
+padding: 88px 20px 12px;
 display: flex; align-items: center; justify-content: space-between;
 border-bottom: 1px solid var(–border);
+position: sticky; top: 0; z-index: 50;
+background: rgba(12,12,15,0.95);
+backdrop-filter: blur(20px);
 }
 .logo {
 font-family: var(–mono);
@@ -75,6 +76,9 @@ font-size: 15px; font-weight: 700;
 letter-spacing: 4px;
 color: var(–accent);
 text-shadow: 0 0 20px rgba(200,255,87,0.4);
+}
+.header-right {
+display: flex; align-items: center; gap: 8px;
 }
 .network-badge {
 display: flex; align-items: center; gap: 6px;
@@ -94,12 +98,22 @@ animation: pulse-dot 2s ease-in-out infinite;
 0%,100% { opacity: 1; }
 50% { opacity: 0.4; }
 }
+.lang-btn {
+background: var(–surface2);
+border: 1px solid var(–border);
+border-radius: 20px; padding: 5px 10px;
+font-family: var(–mono); font-size: 10px;
+color: var(–accent); letter-spacing: 1px;
+cursor: pointer; transition: all 0.2s;
+}
+.lang-btn:active { background: var(–surface); }
 
-/* ── CONNECT SCREEN ── */
+/* CONNECT SCREEN */
 #connectScreen {
 display: flex; flex-direction: column;
 align-items: center; justify-content: center;
-min-height: 70vh; padding: 40px 24px;
+min-height: calc(100vh - 120px);
+padding: 40px 24px;
 text-align: center;
 }
 .connect-glyph {
@@ -145,7 +159,7 @@ transition: all 0.2s;
 }
 .btn-connect:active { transform: scale(0.97); }
 
-/* ── WALLET SCREEN ── */
+/* WALLET SCREEN */
 #walletScreen { display: none; }
 
 /* BALANCE CARD */
@@ -174,12 +188,8 @@ font-weight: 700; color: var(–text);
 line-height: 1; margin-bottom: 4px;
 }
 .balance-amount span { color: var(–accent); font-size: 20px; }
-.balance-usd {
-font-size: 13px; color: var(–muted); margin-bottom: 20px;
-}
-.balance-tokens {
-display: flex; gap: 8px;
-}
+.balance-usd { font-size: 13px; color: var(–muted); margin-bottom: 20px; }
+.balance-tokens { display: flex; gap: 8px; flex-wrap: wrap; }
 .token-chip {
 display: flex; align-items: center; gap: 6px;
 background: var(–surface2);
@@ -190,7 +200,7 @@ font-family: var(–mono); font-size: 11px;
 .token-chip.nomad { color: var(–accent); border-color: rgba(200,255,87,0.2); }
 .token-chip.ton { color: var(–accent2); border-color: rgba(87,200,255,0.2); }
 
-/* ACTION BUTTONS */
+/* ACTIONS */
 .actions {
 display: grid; grid-template-columns: 1fr 1fr 1fr;
 gap: 8px; padding: 12px 16px;
@@ -222,10 +232,6 @@ font-family: var(–mono); font-size: 10px;
 letter-spacing: 3px; color: var(–muted);
 text-transform: uppercase;
 }
-.section-link {
-font-size: 11px; color: var(–accent);
-cursor: pointer; opacity: 0.7;
-}
 
 /* TX LIST */
 .tx-list { display: flex; flex-direction: column; gap: 6px; }
@@ -252,7 +258,7 @@ white-space: nowrap;
 .tx-amount.in { color: var(–accent); }
 .tx-amount.out { color: var(–warn); }
 
-/* NOMAD ECONOMY */
+/* ECONOMY CARD */
 .economy-card {
 background: var(–surface);
 border: 1px solid rgba(200,255,87,0.15);
@@ -265,8 +271,7 @@ letter-spacing: 2px; color: var(–accent);
 margin-bottom: 12px; text-transform: uppercase;
 }
 .economy-stats {
-display: grid; grid-template-columns: 1fr 1fr;
-gap: 8px;
+display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
 }
 .econ-stat {
 background: var(–surface2);
@@ -283,7 +288,7 @@ margin-top: 2px; letter-spacing: 1px;
 text-transform: uppercase;
 }
 
-/* REFERRAL CARD */
+/* REFERRAL */
 .ref-card {
 background: linear-gradient(135deg, rgba(87,200,255,0.06), rgba(200,255,87,0.04));
 border: 1px solid rgba(87,200,255,0.2);
@@ -438,9 +443,6 @@ animation: toastAnim 2.5s ease forwards;
 80% { opacity:1; }
 100% { opacity:0; }
 }
-
-/* ADDRESS TRUNCATE */
-.addr { font-family: var(–mono); font-size: 11px; color: var(–muted); }
 </style>
 
 </head>
@@ -451,9 +453,12 @@ animation: toastAnim 2.5s ease forwards;
 
   <div class="header">
     <div class="logo">NOMAD</div>
-    <div class="network-badge">
-      <div class="network-dot"></div>
-      TON
+    <div class="header-right">
+      <button class="lang-btn" onclick="toggleLang()" id="langBtn">RU</button>
+      <div class="network-badge">
+        <div class="network-dot"></div>
+        TON
+      </div>
     </div>
   </div>
 
@@ -462,35 +467,35 @@ animation: toastAnim 2.5s ease forwards;
   <div id="connectScreen">
     <div class="connect-glyph">⬡</div>
     <div class="connect-title">NOMAD WALLET</div>
-    <div class="connect-sub">Финансовый инструмент для людей без границ</div>
+    <div class="connect-sub" data-i18n="connectSub">A financial tool for people without borders</div>
 
-```
+
 <div class="connect-features">
   <div class="feature-row">
     <div class="feature-icon">💸</div>
     <div class="feature-text">
-      <strong>P2P переводы</strong>
-      По @username без банков и границ
+      <strong data-i18n="f1title">P2P transfers</strong>
+      <span data-i18n="f1desc">By @username, no banks, no borders</span>
     </div>
   </div>
   <div class="feature-row">
     <div class="feature-icon">🪙</div>
     <div class="feature-text">
-      <strong>NOMAD токен</strong>
-      Валюта сообщества кочевников
+      <strong data-i18n="f2title">NOMAD token</strong>
+      <span data-i18n="f2desc">Currency of the nomad community on TON</span>
     </div>
   </div>
   <div class="feature-row">
     <div class="feature-icon">🔒</div>
     <div class="feature-text">
-      <strong>Без сервера</strong>
-      Всё на блокчейне TON
+      <strong data-i18n="f3title">No server</strong>
+      <span data-i18n="f3desc">Everything on the TON blockchain</span>
     </div>
   </div>
 </div>
 
-<button class="btn-connect" onclick="connectWallet()">
-  ПОДКЛЮЧИТЬ КОШЕЛЁК
+<button class="btn-connect" onclick="connectWallet()" data-i18n="connectBtn">
+  CONNECT WALLET
 </button>
 
   </div>
@@ -498,13 +503,11 @@ animation: toastAnim 2.5s ease forwards;
   <!-- WALLET SCREEN -->
 
   <div id="walletScreen">
-
-<!-- SCREEN: HOME -->
+    
+<!-- HOME -->
 <div class="screen active" id="screen-home">
-
-  <!-- BALANCE -->
   <div class="balance-card">
-    <div class="balance-label">// Общий баланс</div>
+    <div class="balance-label" data-i18n="totalBalance">// Total balance</div>
     <div class="balance-amount" id="balanceAmount">0.00 <span>TON</span></div>
     <div class="balance-usd" id="balanceUsd">≈ $0.00 USD</div>
     <div class="balance-tokens">
@@ -513,42 +516,38 @@ animation: toastAnim 2.5s ease forwards;
     </div>
   </div>
 
-  <!-- ACTIONS -->
   <div class="actions">
     <div class="action-btn" onclick="openModal('send')">
       <div class="action-icon">↗</div>
-      <div class="action-label">Отправить</div>
+      <div class="action-label" data-i18n="send">Send</div>
     </div>
     <div class="action-btn" onclick="openModal('receive')">
       <div class="action-icon">↙</div>
-      <div class="action-label">Получить</div>
+      <div class="action-label" data-i18n="receive">Receive</div>
     </div>
     <div class="action-btn" onclick="openModal('swap')">
       <div class="action-icon">⇄</div>
-      <div class="action-label">Обмен</div>
+      <div class="action-label" data-i18n="swap">Swap</div>
     </div>
   </div>
 
-  <!-- TRANSACTIONS -->
   <div class="section">
     <div class="section-header">
-      <div class="section-title">// История</div>
+      <div class="section-title" data-i18n="history">// History</div>
     </div>
     <div class="tx-list" id="txList"></div>
   </div>
-
 </div>
 
-<!-- SCREEN: NOMAD TOKEN -->
+<!-- NOMAD TOKEN -->
 <div class="screen" id="screen-nomad">
   <div style="padding:16px">
-
     <div class="economy-card">
       <div class="economy-title">⬡ NOMAD Token</div>
       <div class="economy-stats">
         <div class="econ-stat">
           <div class="econ-val" id="eNomadBal">0</div>
-          <div class="econ-lbl">Мой баланс</div>
+          <div class="econ-lbl" data-i18n="myBalance">My balance</div>
         </div>
         <div class="econ-stat">
           <div class="econ-val">1,000,000</div>
@@ -556,159 +555,261 @@ animation: toastAnim 2.5s ease forwards;
         </div>
         <div class="econ-stat">
           <div class="econ-val">$0.042</div>
-          <div class="econ-lbl">Цена</div>
+          <div class="econ-lbl" data-i18n="price">Price</div>
         </div>
         <div class="econ-stat">
-          <div class="econ-val" id="eHolders">847</div>
-          <div class="econ-lbl">Холдеры</div>
+          <div class="econ-val">847</div>
+          <div class="econ-lbl">Holders</div>
         </div>
       </div>
     </div>
 
-    <div class="section-title" style="margin-bottom:10px">// Как получить</div>
+    <div class="section-title" style="margin-bottom:10px" data-i18n="howToEarn">// How to earn</div>
     <div class="tx-list">
       <div class="tx-item">
         <div class="tx-avatar">👋</div>
         <div class="tx-info">
-          <div class="tx-name">Онбординг</div>
-          <div class="tx-date">За первое подключение</div>
+          <div class="tx-name" data-i18n="onboard">Onboarding</div>
+          <div class="tx-date" data-i18n="onboardDesc">First connection</div>
         </div>
         <div class="tx-amount in">+100 ⬡</div>
       </div>
       <div class="tx-item">
         <div class="tx-avatar">👥</div>
         <div class="tx-info">
-          <div class="tx-name">Реферал</div>
-          <div class="tx-date">За каждого кочевника</div>
+          <div class="tx-name" data-i18n="referral">Referral</div>
+          <div class="tx-date" data-i18n="referralDesc">Per invited nomad</div>
         </div>
         <div class="tx-amount in">+50 ⬡</div>
       </div>
       <div class="tx-item">
         <div class="tx-avatar">💸</div>
         <div class="tx-info">
-          <div class="tx-name">P2P активность</div>
-          <div class="tx-date">За каждый перевод</div>
+          <div class="tx-name" data-i18n="p2pActivity">P2P activity</div>
+          <div class="tx-date" data-i18n="p2pDesc">Per transfer</div>
         </div>
         <div class="tx-amount in">+5 ⬡</div>
       </div>
       <div class="tx-item">
         <div class="tx-avatar">🏪</div>
         <div class="tx-info">
-          <div class="tx-name">Merchant скидка</div>
-          <div class="tx-date">Оплата в NOMAD</div>
+          <div class="tx-name" data-i18n="merchant">Merchant discount</div>
+          <div class="tx-date" data-i18n="merchantDesc">Pay in NOMAD</div>
         </div>
         <div class="tx-amount in">-10%</div>
       </div>
     </div>
+
+    <div style="margin-top:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:6px">CONTRACT</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);word-break:break-all;cursor:pointer" onclick="copyContract()">EQCUm1TkLN1CYIr43xGqZ_KYSJEcAD05xllkvGGtB-8J_w24</div>
+    </div>
   </div>
 </div>
 
-<!-- SCREEN: COMMUNITY -->
+<!-- COMMUNITY -->
 <div class="screen" id="screen-community">
-  <div style="padding:16px; display:flex; flex-direction:column; gap:10px">
-
+  <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
     <div class="ref-card">
-      <div class="ref-title">📡 Реферальная программа</div>
-      <div class="ref-desc">Приглашай кочевников — получай NOMAD токены. Твои рефералы тоже получают бонус при подключении.</div>
-      <div class="ref-link" id="refLink" onclick="copyRef()">t.me/nomad_bot?start=...</div>
-      <button class="btn-small" onclick="copyRef()">СКОПИРОВАТЬ ССЫЛКУ</button>
+      <div class="ref-title" data-i18n="refProgram">📡 Referral Program</div>
+      <div class="ref-desc" data-i18n="refDesc">Invite nomads — earn NOMAD tokens. Your referrals also get a bonus on connection.</div>
+      <div class="ref-link" id="refLink" onclick="copyRef()">t.me/nomad_wallet_bot?start=...</div>
+      <button class="btn-small" onclick="copyRef()" data-i18n="copyLink">COPY LINK</button>
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px">
-      <div class="section-title" style="margin-bottom:12px">// Топ кочевников</div>
+      <div class="section-title" style="margin-bottom:12px" data-i18n="topNomads">// Top Nomads</div>
       <div class="tx-list" id="communityList"></div>
     </div>
+  </div>
+</div>
 
   </div>
 </div>
 
-
-  </div><!-- /walletScreen -->
-</div><!-- /app -->
-
-<!-- BOTTOM NAV (only when connected) -->
+<!-- BOTTOM NAV -->
 
 <div class="bottom-nav" id="bottomNav" style="display:none">
   <div class="nav-item active" onclick="showScreen('home',this)">
-    <div class="nav-icon">◈</div>Кошелёк
+    <div class="nav-icon">◈</div>
+    <span data-i18n="wallet">Wallet</span>
   </div>
   <div class="nav-item" onclick="showScreen('nomad',this)">
-    <div class="nav-icon">⬡</div>NOMAD
+    <div class="nav-icon">⬡</div>
+    NOMAD
   </div>
   <div class="nav-item" onclick="showScreen('community',this)">
-    <div class="nav-icon">◎</div>Сеть
+    <div class="nav-icon">◎</div>
+    <span data-i18n="network">Network</span>
   </div>
 </div>
 
-<!-- MODALS -->
-
-<!-- SEND -->
+<!-- MODAL: SEND -->
 
 <div class="modal-overlay" id="modalSend" onclick="closeModal('send')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-    <div class="modal-title">↗ Отправить</div>
+    <div class="modal-title" data-i18n="send">↗ Send</div>
     <div class="input-group">
-      <label class="input-label">Получатель (@username или адрес)</label>
+      <label class="input-label" data-i18n="recipient">Recipient (@username or address)</label>
       <input class="input-field" id="sendTo" placeholder="@nomad_user" />
     </div>
     <div class="input-group">
-      <label class="input-label">Сумма</label>
+      <label class="input-label" data-i18n="amount">Amount</label>
       <input class="input-field" id="sendAmount" placeholder="0.00" type="number" />
     </div>
     <div class="input-group">
-      <label class="input-label">Токен</label>
+      <label class="input-label">Token</label>
       <select class="input-field" id="sendToken">
         <option value="ton">TON</option>
         <option value="nomad">NOMAD ⬡</option>
       </select>
     </div>
-    <button class="btn-primary" onclick="doSend()">ПОДТВЕРДИТЬ В КОШЕЛЬКЕ</button>
-    <button class="btn-cancel" onclick="closeModal('send')">отмена</button>
+    <button class="btn-primary" onclick="doSend()" data-i18n="confirmWallet">CONFIRM IN WALLET</button>
+    <button class="btn-cancel" onclick="closeModal('send')" data-i18n="cancel">cancel</button>
   </div>
 </div>
 
-<!-- RECEIVE -->
+<!-- MODAL: RECEIVE -->
 
 <div class="modal-overlay" id="modalReceive" onclick="closeModal('receive')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-    <div class="modal-title">↙ Получить</div>
+    <div class="modal-title" data-i18n="receive">↙ Receive</div>
     <div class="qr-container">
-      <div class="qr-box" id="qrBox">
+      <div class="qr-box">
         <canvas id="qrCanvas" width="168" height="168"></canvas>
       </div>
-      <div class="qr-address" id="receiveAddr">Подключите кошелёк для получения адреса</div>
-      <button class="btn-small" onclick="copyAddress()">СКОПИРОВАТЬ АДРЕС</button>
+      <div class="qr-address" id="receiveAddr" data-i18n="connectFirst">Connect wallet to get address</div>
+      <button class="btn-small" onclick="copyAddress()" data-i18n="copyAddress">COPY ADDRESS</button>
     </div>
-    <button class="btn-cancel" onclick="closeModal('receive')">закрыть</button>
+    <button class="btn-cancel" onclick="closeModal('receive')" data-i18n="close">close</button>
   </div>
 </div>
 
-<!-- SWAP -->
+<!-- MODAL: SWAP -->
 
 <div class="modal-overlay" id="modalSwap" onclick="closeModal('swap')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-    <div class="modal-title">⇄ Обмен</div>
+    <div class="modal-title" data-i18n="swap">⇄ Swap</div>
     <div class="input-group">
-      <label class="input-label">Отдаю</label>
+      <label class="input-label" data-i18n="youSend">You send</label>
       <input class="input-field" id="swapFrom" placeholder="0.00 TON" type="number" />
     </div>
     <div style="text-align:center;color:var(--muted);font-family:var(--mono);font-size:18px;margin:8px 0">↓</div>
     <div class="input-group">
-      <label class="input-label">Получаю (≈)</label>
+      <label class="input-label" data-i18n="youGet">You get (≈)</label>
       <input class="input-field" id="swapTo" placeholder="0 NOMAD" readonly />
     </div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:14px;letter-spacing:1px">
-      1 TON ≈ 238 NOMAD · через STON.fi
+      1 TON ≈ 238 NOMAD · via STON.fi
     </div>
-    <button class="btn-primary" onclick="doSwap()">ОБМЕНЯТЬ</button>
-    <button class="btn-cancel" onclick="closeModal('swap')">отмена</button>
+    <button class="btn-primary" onclick="doSwap()" data-i18n="swapBtn">SWAP</button>
+    <button class="btn-cancel" onclick="closeModal('swap')" data-i18n="cancel">cancel</button>
   </div>
 </div>
 
 <script>
+// ===== i18n =====
+const NOMAD_CONTRACT = 'EQCUm1TkLN1CYIr43xGqZ_KYSJEcAD05xllkvGGtB-8J_w24';
+
+const i18n = {
+  en: {
+    connectSub: 'A financial tool for people without borders',
+    f1title: 'P2P transfers', f1desc: 'By @username, no banks, no borders',
+    f2title: 'NOMAD token', f2desc: 'Currency of the nomad community on TON',
+    f3title: 'No server', f3desc: 'Everything on the TON blockchain',
+    connectBtn: 'CONNECT WALLET',
+    totalBalance: '// Total balance',
+    send: 'Send', receive: 'Receive', swap: 'Swap',
+    history: '// History',
+    myBalance: 'My balance', price: 'Price',
+    howToEarn: '// How to earn',
+    onboard: 'Onboarding', onboardDesc: 'First connection',
+    referral: 'Referral', referralDesc: 'Per invited nomad',
+    p2pActivity: 'P2P activity', p2pDesc: 'Per transfer',
+    merchant: 'Merchant discount', merchantDesc: 'Pay in NOMAD',
+    refProgram: '📡 Referral Program',
+    refDesc: 'Invite nomads — earn NOMAD tokens. Your referrals also get a bonus on connection.',
+    copyLink: 'COPY LINK',
+    topNomads: '// Top Nomads',
+    wallet: 'Wallet', network: 'Network',
+    recipient: 'Recipient (@username or address)',
+    amount: 'Amount', confirmWallet: 'CONFIRM IN WALLET',
+    cancel: 'cancel', close: 'close',
+    connectFirst: 'Connect wallet to get address',
+    copyAddress: 'COPY ADDRESS',
+    youSend: 'You send', youGet: 'You get (≈)', swapBtn: 'SWAP',
+    toastWelcome: '⬡ +100 NOMAD — welcome!',
+    toastCopied: 'Link copied!',
+    toastAddrCopied: 'Address copied!',
+    toastContractCopied: 'Contract copied!',
+    toastFill: 'Fill all fields',
+    toastNoTon: 'Not enough TON',
+    toastNoNomad: 'Not enough NOMAD',
+    toastSent: '✓ Sent + 5 ⬡ for activity',
+    toastSwapped: '⇄ Swapped via STON.fi',
+    toastAmount: 'Enter amount',
+  },
+  ru: {
+    connectSub: 'Финансовый инструмент для людей без границ',
+    f1title: 'P2P переводы', f1desc: 'По @username, без банков и границ',
+    f2title: 'NOMAD токен', f2desc: 'Валюта сообщества кочевников на TON',
+    f3title: 'Без сервера', f3desc: 'Всё на блокчейне TON',
+    connectBtn: 'ПОДКЛЮЧИТЬ КОШЕЛЁК',
+    totalBalance: '// Общий баланс',
+    send: 'Отправить', receive: 'Получить', swap: 'Обмен',
+    history: '// История',
+    myBalance: 'Мой баланс', price: 'Цена',
+    howToEarn: '// Как получить',
+    onboard: 'Онбординг', onboardDesc: 'За первое подключение',
+    referral: 'Реферал', referralDesc: 'За каждого кочевника',
+    p2pActivity: 'P2P активность', p2pDesc: 'За каждый перевод',
+    merchant: 'Merchant скидка', merchantDesc: 'Оплата в NOMAD',
+    refProgram: '📡 Реферальная программа',
+    refDesc: 'Приглашай кочевников — получай NOMAD. Рефералы тоже получают бонус.',
+    copyLink: 'СКОПИРОВАТЬ ССЫЛКУ',
+    topNomads: '// Топ кочевников',
+    wallet: 'Кошелёк', network: 'Сеть',
+    recipient: 'Получатель (@username или адрес)',
+    amount: 'Сумма', confirmWallet: 'ПОДТВЕРДИТЬ В КОШЕЛЬКЕ',
+    cancel: 'отмена', close: 'закрыть',
+    connectFirst: 'Подключите кошелёк для получения адреса',
+    copyAddress: 'СКОПИРОВАТЬ АДРЕС',
+    youSend: 'Отдаю', youGet: 'Получаю (≈)', swapBtn: 'ОБМЕНЯТЬ',
+    toastWelcome: '⬡ +100 NOMAD — добро пожаловать!',
+    toastCopied: 'Ссылка скопирована!',
+    toastAddrCopied: 'Адрес скопирован!',
+    toastContractCopied: 'Контракт скопирован!',
+    toastFill: 'Заполни все поля',
+    toastNoTon: 'Недостаточно TON',
+    toastNoNomad: 'Недостаточно NOMAD',
+    toastSent: '✓ Отправлено + 5 ⬡ за активность',
+    toastSwapped: '⇄ Обменяно через STON.fi',
+    toastAmount: 'Введи сумму',
+  }
+};
+
+let lang = localStorage.getItem('nomad_lang') || 'en';
+
+function t(key) { return i18n[lang][key] || key; }
+
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  document.getElementById('langBtn').textContent = lang === 'en' ? 'RU' : 'EN';
+}
+
+function toggleLang() {
+  lang = lang === 'en' ? 'ru' : 'en';
+  localStorage.setItem('nomad_lang', lang);
+  applyLang();
+  tg?.HapticFeedback?.impactOccurred('light');
+}
+
 // ===== TELEGRAM =====
 const tg = window.Telegram?.WebApp ?? null;
 if (tg) { tg.ready(); tg.expand(); }
@@ -724,39 +825,22 @@ async function initTonConnect() {
       buttonRootId: null
     });
     tonConnectUI.onStatusChange(wallet => {
-      if (wallet) {
-        walletAddress = wallet.account.address;
-        onWalletConnected(walletAddress);
-      } else {
-        onWalletDisconnected();
-      }
+      if (wallet) { walletAddress = wallet.account.address; onWalletConnected(walletAddress); }
+      else onWalletDisconnected();
     });
-    // Если уже подключён
     const wallet = tonConnectUI.wallet;
-    if (wallet) {
-      walletAddress = wallet.account.address;
-      onWalletConnected(walletAddress);
-    }
-  } catch(e) {
-    console.log('TON Connect init:', e);
-  }
+    if (wallet) { walletAddress = wallet.account.address; onWalletConnected(walletAddress); }
+  } catch(e) { console.log('TON Connect:', e); }
 }
 
 async function connectWallet() {
-  if (!tonConnectUI) {
-    // Demo mode если нет TON Connect
-    demoConnect();
-    return;
-  }
-  try {
-    await tonConnectUI.openModal();
-  } catch(e) {
-    demoConnect();
-  }
+  if (!tonConnectUI) { demoConnect(); return; }
+  try { await tonConnectUI.openModal(); }
+  catch(e) { demoConnect(); }
 }
 
 function demoConnect() {
-  walletAddress = 'UQD' + Math.random().toString(36).slice(2,12).toUpperCase() + '...demo';
+  walletAddress = 'UQD' + Math.random().toString(36).slice(2,12).toUpperCase() + 'demo';
   onWalletConnected(walletAddress);
 }
 
@@ -764,26 +848,19 @@ function onWalletConnected(addr) {
   document.getElementById('connectScreen').style.display = 'none';
   document.getElementById('walletScreen').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
-
-  const short = addr.slice(0,6) + '...' + addr.slice(-4);
   document.getElementById('receiveAddr').textContent = addr;
   drawQR(addr);
-
-  // Загрузить стейт
   loadWalletState();
   renderTx();
   renderCommunity();
   updateRefLink(addr);
-
-  // Онбординг бонус
   if (!localStorage.getItem('nomad_onboard')) {
     localStorage.setItem('nomad_onboard', '1');
     const s = getWState();
     s.nomad += 100;
     saveWState(s);
-    setTimeout(() => showToast('⬡ +100 NOMAD — добро пожаловать!'), 800);
+    setTimeout(() => showToast(t('toastWelcome')), 800);
   }
-
   tg?.HapticFeedback?.notificationOccurred('success');
 }
 
@@ -793,16 +870,13 @@ function onWalletDisconnected() {
   document.getElementById('bottomNav').style.display = 'none';
 }
 
-// ===== WALLET STATE =====
+// ===== STATE =====
 function getWState() {
   try {
     const raw = localStorage.getItem('nomad_wallet');
-    if (raw) {
-      const d = JSON.parse(raw);
-      return d;
-    }
+    if (raw) return JSON.parse(raw);
   } catch(e) {}
-  return { ton: 0.00, nomad: 0, txs: [] };
+  return { ton: 0, nomad: 0, txs: [] };
 }
 
 function saveWState(s) {
@@ -810,10 +884,7 @@ function saveWState(s) {
   updateBalanceUI(s);
 }
 
-function loadWalletState() {
-  const s = getWState();
-  updateBalanceUI(s);
-}
+function loadWalletState() { updateBalanceUI(getWState()); }
 
 function updateBalanceUI(s) {
   document.getElementById('balanceAmount').innerHTML = `${s.ton.toFixed(2)} <span>TON</span>`;
@@ -823,17 +894,17 @@ function updateBalanceUI(s) {
   document.getElementById('eNomadBal').textContent = s.nomad;
 }
 
-// ===== TRANSACTIONS =====
+// ===== TX =====
 const MOCK_TXS = [
-  { avatar:'🌏', name:'@bangkok_dao', date:'2ч назад', amount:'+2.5 TON', type:'in' },
-  { avatar:'☕', name:'@coffee_nomad', date:'вчера', amount:'-0.8 TON', type:'out' },
-  { avatar:'⬡', name:'Earn reward', date:'3 дня назад', amount:'+50 NOMAD', type:'in' },
-  { avatar:'🔄', name:'Swap TON→NOMAD', date:'5 дней назад', amount:'+238 NOMAD', type:'in' },
+  { avatar:'🌏', name:'@bangkok_dao', date:'2h ago', amount:'+2.5 TON', type:'in' },
+  { avatar:'☕', name:'@coffee_nomad', date:'yesterday', amount:'-0.8 TON', type:'out' },
+  { avatar:'⬡', name:'Earn reward', date:'3 days ago', amount:'+50 NOMAD', type:'in' },
+  { avatar:'🔄', name:'Swap TON→NOMAD', date:'5 days ago', amount:'+238 NOMAD', type:'in' },
 ];
 
 function renderTx() {
   const s = getWState();
-  const allTxs = [...(s.txs || []).reverse(), ...MOCK_TXS];
+  const allTxs = [...(s.txs || []).slice().reverse(), ...MOCK_TXS];
   const list = document.getElementById('txList');
   list.innerHTML = '';
   allTxs.slice(0,8).forEach(tx => {
@@ -853,11 +924,11 @@ function renderTx() {
 
 // ===== COMMUNITY =====
 const MOCK_COMMUNITY = [
-  { name:'@zero_borders', nomad: 4821, flag:'🌏' },
-  { name:'@digital_nomad_x', nomad: 3200, flag:'🇹🇭' },
-  { name:'@freeroam', nomad: 2840, flag:'🇵🇹' },
-  { name:'@nomad_lia', nomad: 2100, flag:'🌊' },
-  { name:'@stateless_dev', nomad: 1540, flag:'🌐' },
+  { name:'@zero_borders', nomad:4821, flag:'🌏' },
+  { name:'@digital_nomad_x', nomad:3200, flag:'🇹🇭' },
+  { name:'@freeroam', nomad:2840, flag:'🇵🇹' },
+  { name:'@nomad_lia', nomad:2100, flag:'🌊' },
+  { name:'@stateless_dev', nomad:1540, flag:'🌐' },
 ];
 
 function renderCommunity() {
@@ -881,21 +952,23 @@ function renderCommunity() {
 
 function updateRefLink(addr) {
   const uid = tg?.initDataUnsafe?.user?.id || addr.slice(3,9);
-  const link = `t.me/nomad_wallet_bot?start=${uid}`;
-  document.getElementById('refLink').textContent = link;
+  document.getElementById('refLink').textContent = `t.me/nomad_wallet_bot?start=${uid}`;
 }
 
 function copyRef() {
-  const text = document.getElementById('refLink').textContent;
-  navigator.clipboard?.writeText(text).catch(()=>{});
-  showToast('Ссылка скопирована!');
+  navigator.clipboard?.writeText(document.getElementById('refLink').textContent).catch(()=>{});
+  showToast(t('toastCopied'));
   tg?.HapticFeedback?.impactOccurred('light');
 }
 
 function copyAddress() {
-  const addr = document.getElementById('receiveAddr').textContent;
-  navigator.clipboard?.writeText(addr).catch(()=>{});
-  showToast('Адрес скопирован!');
+  navigator.clipboard?.writeText(document.getElementById('receiveAddr').textContent).catch(()=>{});
+  showToast(t('toastAddrCopied'));
+}
+
+function copyContract() {
+  navigator.clipboard?.writeText(NOMAD_CONTRACT).catch(()=>{});
+  showToast(t('toastContractCopied'));
 }
 
 // ===== SEND =====
@@ -903,72 +976,53 @@ async function doSend() {
   const to = document.getElementById('sendTo').value.trim();
   const amount = parseFloat(document.getElementById('sendAmount').value);
   const token = document.getElementById('sendToken').value;
-
-  if (!to || !amount || amount <= 0) { showToast('Заполни все поля'); return; }
-
+  if (!to || !amount || amount <= 0) { showToast(t('toastFill')); return; }
   const s = getWState();
-  if (token === 'ton' && s.ton < amount) { showToast('Недостаточно TON'); return; }
-  if (token === 'nomad' && s.nomad < amount) { showToast('Недостаточно NOMAD'); return; }
-
-  // В реальном апп здесь TON Connect transaction
+  if (token === 'ton' && s.ton < amount) { showToast(t('toastNoTon')); return; }
+  if (token === 'nomad' && s.nomad < amount) { showToast(t('toastNoNomad')); return; }
   if (token === 'ton') s.ton = +(s.ton - amount).toFixed(2);
   else s.nomad -= Math.floor(amount);
-
-  // +5 NOMAD за активность
   s.nomad += 5;
-
   const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
   s.txs = s.txs || [];
-  s.txs.push({ avatar:'↗', name: to, date:'только что', amount:`-${label}`, type:'out' });
-
-  saveWState(s);
-  renderTx();
-  closeModal('send');
-  showToast(`✓ Отправлено + 5 ⬡ за активность`);
+  s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${label}`, type:'out' });
+  saveWState(s); renderTx(); closeModal('send');
+  showToast(t('toastSent'));
   tg?.HapticFeedback?.notificationOccurred('success');
-
-  // Отправить в бот
   tg?.sendData(JSON.stringify({ action:'send', to, amount, token }));
-
-  // Reset
   document.getElementById('sendTo').value = '';
   document.getElementById('sendAmount').value = '';
 }
 
 // ===== SWAP =====
-document.getElementById('swapFrom')?.addEventListener('input', e => {
-  const val = parseFloat(e.target.value) || 0;
-  document.getElementById('swapTo').value = Math.floor(val * 238);
+document.getElementById('swapFrom').addEventListener('input', e => {
+  document.getElementById('swapTo').value = Math.floor((parseFloat(e.target.value)||0) * 238);
 });
 
 function doSwap() {
   const from = parseFloat(document.getElementById('swapFrom').value);
-  if (!from || from <= 0) { showToast('Введи сумму'); return; }
+  if (!from || from <= 0) { showToast(t('toastAmount')); return; }
   const s = getWState();
-  if (s.ton < from) { showToast('Недостаточно TON'); return; }
+  if (s.ton < from) { showToast(t('toastNoTon')); return; }
   s.ton = +(s.ton - from).toFixed(2);
   s.nomad += Math.floor(from * 238);
   s.txs = s.txs || [];
-  s.txs.push({ avatar:'⇄', name:'Swap TON→NOMAD', date:'только что', amount:`+${Math.floor(from*238)} NOMAD`, type:'in' });
-  saveWState(s);
-  renderTx();
-  closeModal('swap');
-  showToast(`⇄ Обменяно через STON.fi`);
+  s.txs.push({ avatar:'⇄', name:'Swap TON→NOMAD', date:'just now', amount:`+${Math.floor(from*238)} NOMAD`, type:'in' });
+  saveWState(s); renderTx(); closeModal('swap');
+  showToast(t('toastSwapped'));
   document.getElementById('swapFrom').value = '';
   document.getElementById('swapTo').value = '';
 }
 
-// ===== QR (простая генерация) =====
+// ===== QR =====
 function drawQR(text) {
   const canvas = document.getElementById('qrCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0,0,168,168);
+  ctx.fillStyle = 'white'; ctx.fillRect(0,0,168,168);
   ctx.fillStyle = '#0c0c0f';
-  // Простой паттерн как заглушка (в продакшне — qrcode.js)
-  const size = 168, cell = size / 21;
-  const pattern = [
+  const cell = 168/21;
+  const p = [
     [1,1,1,1,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,0],
     [1,0,0,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0],
     [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0,0],
@@ -991,7 +1045,7 @@ function drawQR(text) {
     [1,0,0,0,0,0,1,0,1,1,0,1,0,1,0,1,0,1,1,0,1],
     [1,1,1,1,1,1,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
   ];
-  pattern.forEach((row,y) => row.forEach((v,x) => {
+  p.forEach((row,y) => row.forEach((v,x) => {
     if (v) ctx.fillRect(x*cell, y*cell, cell-0.5, cell-0.5);
   }));
 }
@@ -1005,7 +1059,6 @@ function showScreen(name, el) {
   tg?.HapticFeedback?.selectionChanged();
 }
 
-// ===== MODALS =====
 function openModal(name) {
   document.getElementById(`modal${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.add('open');
 }
@@ -1013,7 +1066,6 @@ function closeModal(name) {
   document.getElementById(`modal${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.remove('open');
 }
 
-// ===== TOAST =====
 function showToast(msg) {
   const t = document.createElement('div');
   t.className = 'toast'; t.textContent = msg;
@@ -1022,6 +1074,7 @@ function showToast(msg) {
 }
 
 // ===== INIT =====
+applyLang();
 initTonConnect();
 </script>
 
