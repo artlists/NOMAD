@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NOMAD</title>
+<title>Wallet</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@tonconnect/ui@2.0.0/dist/tonconnect-ui.min.js"></script>
 <script>window.__ton_loaded = true;</script>
@@ -15,17 +15,17 @@
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
 :root {
---bg: #0c0c0f;
---surface: #141418;
---surface2: #1c1c22;
---border: rgba(255,255,255,0.07);
---border2: rgba(255,255,255,0.12);
---text: #f0efe8;
---muted: rgba(240,239,232,0.4);
---dim: rgba(240,239,232,0.15);
---accent: #c8ff57;
---accent2: #57c8ff;
---warn: #ff7043;
+--bg: #ffffff;
+--surface: #ffffff;
+--surface2: #f6f6f6;
+--border: rgba(0,0,0,0.08);
+--border2: rgba(0,0,0,0.14);
+--text: #0b0b0b;
+--muted: rgba(11,11,11,0.54);
+--dim: rgba(11,11,11,0.28);
+--accent: #0b0b0b;
+--accent2: #0b0b0b;
+--warn: #0b0b0b;
 --mono: 'Space Mono', monospace;
 --sans: 'DM Sans', sans-serif;
 }
@@ -41,92 +41,70 @@ overflow-x: hidden;
 body::before {
 content: '';
 position: fixed; inset: 0; z-index: 0;
-background-image:
-linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-background-size: 40px 40px;
+background-image: linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+background-size: 32px 32px;
 pointer-events: none;
 }
 
 body::after {
 content: '';
 position: fixed; inset: 0; z-index: 0;
-background:
-radial-gradient(ellipse 50% 30% at 80% 10%, rgba(200,255,87,0.06) 0%, transparent 60%),
-radial-gradient(ellipse 40% 40% at 10% 80%, rgba(87,200,255,0.05) 0%, transparent 60%);
+background: radial-gradient(ellipse 40% 20% at 50% 0%, rgba(0,0,0,0.04) 0%, transparent 60%);
 pointer-events: none;
 }
 
 #app {
 position: relative; z-index: 1;
 max-width: 430px; margin: 0 auto;
-padding: 178px 0 90px;
+padding: 110px 0 90px;
 min-height: 100vh;
 }
 
 /* HEADER */
 .header {
-padding: 0 20px;
+padding: 18px 16px 14px;
 display: flex; align-items: center; justify-content: space-between;
+position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+width: 100%; max-width: 430px; z-index: 50;
+background: rgba(255,255,255,0.98);
 border-bottom: 1px solid var(--border);
-position: fixed; top: 90px; left: 50%; transform: translateX(-50%); width: 100%; z-index: 50;
-background: rgba(12,12,15,0.97); height: 88px;
-backdrop-filter: blur(20px);
+backdrop-filter: blur(10px);
 }
 .logo {
 font-family: var(--mono);
-font-size: 15px; font-weight: 700;
-letter-spacing: 4px;
-color: var(--accent);
-text-shadow: 0 0 20px rgba(200,255,87,0.4);
+font-size: 12px; font-weight: 700;
+letter-spacing: 3px;
+color: var(--text);
 }
 .header-right {
 display: flex; align-items: center; gap: 8px;
 }
-.network-badge {
-display: flex; align-items: center; gap: 6px;
-background: var(--surface2);
-border: 1px solid var(--border);
-border-radius: 20px; padding: 5px 10px;
-font-family: var(--mono); font-size: 10px;
-color: var(--muted); letter-spacing: 1px;
-}
-.network-dot {
-width: 6px; height: 6px; border-radius: 50%;
-background: var(--accent);
-box-shadow: 0 0 6px var(--accent);
-animation: pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-0%,100% { opacity: 1; }
-50% { opacity: 0.4; }
-}
 .lang-btn {
-background: var(--surface2);
-border: 1px solid var(--border);
-border-radius: 20px; padding: 5px 10px;
+background: transparent;
+border: 1px solid var(--border2);
+border-radius: 999px; padding: 6px 10px;
 font-family: var(--mono); font-size: 10px;
-color: var(--accent); letter-spacing: 1px;
+color: var(--text); letter-spacing: 1px;
 cursor: pointer; transition: all 0.2s;
 }
-.lang-btn:active { background: var(--surface); }
+.lang-btn:active { background: var(--surface2); }
 
 /* CONNECT SCREEN */
 #connectScreen {
 display: flex; flex-direction: column;
 align-items: center; justify-content: center;
 min-height: calc(100vh - 120px);
-padding: 40px 24px;
+padding: 40px 24px 20px;
 text-align: center;
 }
 .connect-glyph {
-font-size: 64px; margin-bottom: 24px;
-filter: drop-shadow(0 0 20px rgba(200,255,87,0.3));
+font-size: 54px; margin-bottom: 24px;
+filter: none;
 }
 .connect-title {
 font-family: var(--mono);
-font-size: 22px; font-weight: 700;
-letter-spacing: 2px; margin-bottom: 8px;
+font-size: 18px; font-weight: 700;
+letter-spacing: 3px; margin-bottom: 8px;
 }
 .connect-sub {
 font-size: 13px; color: var(--muted);
@@ -141,7 +119,7 @@ width: 100%; max-width: 300px; margin-bottom: 36px;
 display: flex; align-items: center; gap: 12px;
 background: var(--surface);
 border: 1px solid var(--border);
-border-radius: 10px; padding: 12px 14px;
+border-radius: 12px; padding: 12px 14px;
 text-align: left;
 }
 .feature-icon { font-size: 18px; flex-shrink: 0; }
@@ -151,13 +129,12 @@ text-align: left;
 .btn-connect {
 width: 100%; max-width: 300px;
 padding: 16px;
-background: var(--accent);
-color: #0c0c0f;
-border: none; border-radius: 12px;
+background: var(--text);
+color: var(--surface);
+border: 1px solid var(--text); border-radius: 12px;
 font-family: var(--mono); font-size: 13px;
 font-weight: 700; letter-spacing: 2px;
 cursor: pointer;
-box-shadow: 0 0 30px rgba(200,255,87,0.25);
 transition: all 0.2s;
 }
 .btn-connect:active { transform: scale(0.97); }
@@ -170,19 +147,12 @@ transition: all 0.2s;
 margin: 16px 16px 0;
 background: var(--surface);
 border: 1px solid var(--border);
-border-radius: 20px; padding: 24px;
+border-radius: 18px; padding: 22px;
 position: relative; overflow: hidden;
-}
-.balance-card::before {
-content: '';
-position: absolute; top: -40px; right: -40px;
-width: 140px; height: 140px;
-background: radial-gradient(circle, rgba(200,255,87,0.08) 0%, transparent 70%);
-border-radius: 50%;
 }
 .balance-label {
 font-family: var(--mono); font-size: 10px;
-letter-spacing: 3px; color: var(--muted);
+letter-spacing: 2px; color: var(--muted);
 text-transform: uppercase; margin-bottom: 8px;
 }
 .balance-amount {
@@ -190,7 +160,7 @@ font-family: var(--mono); font-size: 36px;
 font-weight: 700; color: var(--text);
 line-height: 1; margin-bottom: 4px;
 }
-.balance-amount span { color: var(--accent); font-size: 20px; }
+.balance-amount span { color: var(--text); font-size: 20px; }
 .balance-usd { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
 .balance-tokens { display: flex; gap: 8px; flex-wrap: wrap; }
 .token-chip {
@@ -200,8 +170,8 @@ border: 1px solid var(--border);
 border-radius: 20px; padding: 6px 12px;
 font-family: var(--mono); font-size: 11px;
 }
-.token-chip.nomad { color: var(--accent); border-color: rgba(200,255,87,0.2); }
-.token-chip.ton { color: var(--accent2); border-color: rgba(87,200,255,0.2); }
+.token-chip.nomad { color: var(--text); }
+.token-chip.ton { color: var(--text); }
 
 /* ACTIONS */
 .actions {
@@ -216,7 +186,7 @@ border: 1px solid var(--border);
 border-radius: 14px; padding: 14px 8px;
 cursor: pointer; transition: all 0.15s;
 }
-.action-btn:active { transform: scale(0.95); border-color: var(--border2); }
+.action-btn:active { transform: scale(0.95); border-color: var(--border2); background: var(--surface2); }
 .action-icon { font-size: 22px; }
 .action-label {
 font-family: var(--mono); font-size: 9px;
@@ -232,7 +202,7 @@ margin-bottom: 10px;
 }
 .section-title {
 font-family: var(--mono); font-size: 10px;
-letter-spacing: 3px; color: var(--muted);
+letter-spacing: 2px; color: var(--muted);
 text-transform: uppercase;
 }
 
@@ -261,73 +231,11 @@ white-space: nowrap;
 .tx-amount.in { color: var(--accent); }
 .tx-amount.out { color: var(--warn); }
 
-/* ECONOMY CARD */
-.economy-card {
-background: var(--surface);
-border: 1px solid rgba(200,255,87,0.15);
-border-radius: 16px; padding: 16px;
-margin-bottom: 8px;
-}
-.economy-title {
-font-family: var(--mono); font-size: 11px;
-letter-spacing: 2px; color: var(--accent);
-margin-bottom: 12px; text-transform: uppercase;
-}
-.economy-stats {
-display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-}
-.econ-stat {
-background: var(--surface2);
-border-radius: 10px; padding: 10px;
-border: 1px solid var(--border);
-}
-.econ-val {
-font-family: var(--mono); font-size: 16px;
-font-weight: 700; color: var(--text);
-}
-.econ-lbl {
-font-size: 10px; color: var(--muted);
-margin-top: 2px; letter-spacing: 1px;
-text-transform: uppercase;
-}
-
-/* REFERRAL */
-.ref-card {
-background: linear-gradient(135deg, rgba(87,200,255,0.06), rgba(200,255,87,0.04));
-border: 1px solid rgba(87,200,255,0.2);
-border-radius: 16px; padding: 16px;
-}
-.ref-title {
-font-family: var(--mono); font-size: 11px;
-letter-spacing: 2px; color: var(--accent2);
-margin-bottom: 8px; text-transform: uppercase;
-}
-.ref-desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
-.ref-link {
-background: var(--surface2);
-border: 1px solid var(--border2);
-border-radius: 8px; padding: 10px 12px;
-font-family: var(--mono); font-size: 11px;
-color: var(--accent2); margin-bottom: 10px;
-word-break: break-all; cursor: pointer;
-}
-.btn-small {
-padding: 10px 16px;
-background: transparent;
-border: 1px solid var(--border2);
-border-radius: 8px;
-font-family: var(--mono); font-size: 10px;
-letter-spacing: 1px; color: var(--text);
-cursor: pointer; transition: all 0.2s;
-width: 100%;
-}
-.btn-small:active { background: var(--surface2); }
-
 /* BOTTOM NAV */
 .bottom-nav {
 position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
 width: 100%; max-width: 430px;
-background: rgba(12,12,15,0.97);
+background: rgba(255,255,255,0.98);
 border-top: 1px solid var(--border);
 display: flex; backdrop-filter: blur(20px);
 z-index: 100;
@@ -340,7 +248,7 @@ color: var(--dim);
 font-family: var(--mono); font-size: 9px;
 letter-spacing: 1px; text-transform: uppercase;
 }
-.nav-item.active { color: var(--accent); }
+.nav-item.active { color: var(--text); }
 .nav-icon { font-size: 18px; margin-bottom: 4px; }
 
 /* MODAL */
@@ -392,12 +300,11 @@ transition: border-color 0.2s;
 .input-field::placeholder { color: var(--dim); }
 .btn-primary {
 width: 100%; padding: 16px;
-background: var(--accent); color: #0c0c0f;
-border: none; border-radius: 12px;
+background: var(--text); color: var(--surface);
+border: 1px solid var(--text); border-radius: 12px;
 font-family: var(--mono); font-size: 12px;
 font-weight: 700; letter-spacing: 2px;
 cursor: pointer; margin-top: 6px;
-box-shadow: 0 0 20px rgba(200,255,87,0.2);
 transition: all 0.2s;
 }
 .btn-primary:active { transform: scale(0.98); }
@@ -433,10 +340,10 @@ word-break: break-all; margin-bottom: 12px;
 /* TOAST */
 .toast {
 position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-background: var(--surface2); border: 1px solid var(--border2);
+background: var(--surface); border: 1px solid var(--border2);
 border-radius: 10px; padding: 10px 20px;
 font-family: var(--mono); font-size: 11px;
-color: var(--accent); letter-spacing: 1px;
+color: var(--text); letter-spacing: 1px;
 z-index: 9999; white-space: nowrap;
 animation: toastAnim 2.5s ease forwards;
 }
@@ -455,13 +362,9 @@ animation: toastAnim 2.5s ease forwards;
   <!-- HEADER -->
 
   <div class="header">
-    <div class="logo">NOMAD</div>
+    <div></div>
     <div class="header-right">
       <button class="lang-btn" onclick="toggleLang()" id="langBtn">RU</button>
-      <div class="network-badge">
-        <div class="network-dot"></div>
-        TON
-      </div>
     </div>
   </div>
 
@@ -469,37 +372,11 @@ animation: toastAnim 2.5s ease forwards;
 
   <div id="connectScreen">
     <div class="connect-glyph">⬡</div>
-    <div class="connect-title">NOMAD WALLET</div>
-    <div class="connect-sub" data-i18n="connectSub">A financial tool for people without borders</div>
-
-
-<div class="connect-features">
-  <div class="feature-row">
-    <div class="feature-icon">💸</div>
-    <div class="feature-text">
-      <strong data-i18n="f1title">P2P transfers</strong>
-      <span data-i18n="f1desc">By @username, no banks, no borders</span>
-    </div>
-  </div>
-  <div class="feature-row">
-    <div class="feature-icon">🪙</div>
-    <div class="feature-text">
-      <strong data-i18n="f2title">NOMAD token</strong>
-      <span data-i18n="f2desc">Currency of the nomad community on TON</span>
-    </div>
-  </div>
-  <div class="feature-row">
-    <div class="feature-icon">🔒</div>
-    <div class="feature-text">
-      <strong data-i18n="f3title">No server</strong>
-      <span data-i18n="f3desc">Everything on the TON blockchain</span>
-    </div>
-  </div>
-</div>
-
-<button class="btn-connect" id="connectBtn" onclick="connectWallet()" data-i18n="connectBtn">
-  CONNECT WALLET
-</button>
+    <div class="connect-title">WALLET</div>
+    <div class="connect-sub" data-i18n="connectSub">A minimal TON wallet interface.</div>
+    <button class="btn-connect" id="connectBtn" onclick="connectWallet()" data-i18n="connectBtn">
+      CONNECT WALLET
+    </button>
 
   </div>
 
@@ -542,91 +419,6 @@ animation: toastAnim 2.5s ease forwards;
   </div>
 </div>
 
-<!-- NOMAD TOKEN -->
-<div class="screen" id="screen-nomad">
-  <div style="padding:16px">
-    <div class="economy-card">
-      <div class="economy-title">⬡ NOMAD Token</div>
-      <div class="economy-stats">
-        <div class="econ-stat">
-          <div class="econ-val" id="eNomadBal">0</div>
-          <div class="econ-lbl" data-i18n="myBalance">My balance</div>
-        </div>
-        <div class="econ-stat">
-          <div class="econ-val">1,000,000</div>
-          <div class="econ-lbl">Total Supply</div>
-        </div>
-        <div class="econ-stat">
-          <div class="econ-val">$0.042</div>
-          <div class="econ-lbl" data-i18n="price">Price</div>
-        </div>
-        <div class="econ-stat">
-          <div class="econ-val">847</div>
-          <div class="econ-lbl">Holders</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-title" style="margin-bottom:10px" data-i18n="howToEarn">// How to earn</div>
-    <div class="tx-list">
-      <div class="tx-item">
-        <div class="tx-avatar">👋</div>
-        <div class="tx-info">
-          <div class="tx-name" data-i18n="onboard">Onboarding</div>
-          <div class="tx-date" data-i18n="onboardDesc">First connection</div>
-        </div>
-        <div class="tx-amount in">+100 ⬡</div>
-      </div>
-      <div class="tx-item">
-        <div class="tx-avatar">👥</div>
-        <div class="tx-info">
-          <div class="tx-name" data-i18n="referral">Referral</div>
-          <div class="tx-date" data-i18n="referralDesc">Per invited nomad</div>
-        </div>
-        <div class="tx-amount in">+50 ⬡</div>
-      </div>
-      <div class="tx-item">
-        <div class="tx-avatar">💸</div>
-        <div class="tx-info">
-          <div class="tx-name" data-i18n="p2pActivity">P2P activity</div>
-          <div class="tx-date" data-i18n="p2pDesc">Per transfer</div>
-        </div>
-        <div class="tx-amount in">+5 ⬡</div>
-      </div>
-      <div class="tx-item">
-        <div class="tx-avatar">🏪</div>
-        <div class="tx-info">
-          <div class="tx-name" data-i18n="merchant">Merchant discount</div>
-          <div class="tx-date" data-i18n="merchantDesc">Pay in NOMAD</div>
-        </div>
-        <div class="tx-amount in">-10%</div>
-      </div>
-    </div>
-
-    <div style="margin-top:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
-      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:6px">CONTRACT</div>
-      <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);word-break:break-all;cursor:pointer" onclick="copyContract()">EQCUm1TkLN1CYIr43xGqZ_KYSJEcAD05xllkvGGtB-8J_w24</div>
-    </div>
-  </div>
-</div>
-
-<!-- COMMUNITY -->
-<div class="screen" id="screen-community">
-  <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
-    <div class="ref-card">
-      <div class="ref-title" data-i18n="refProgram">📡 Referral Program</div>
-      <div class="ref-desc" data-i18n="refDesc">Invite nomads — earn NOMAD tokens. Your referrals also get a bonus on connection.</div>
-      <div class="ref-link" id="refLink" onclick="copyRef()">t.me/nomad_wallet_bot?start=...</div>
-      <button class="btn-small" onclick="copyRef()" data-i18n="copyLink">COPY LINK</button>
-    </div>
-
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px">
-      <div class="section-title" style="margin-bottom:12px" data-i18n="topNomads">// Top Nomads</div>
-      <div class="tx-list" id="communityList"></div>
-    </div>
-  </div>
-</div>
-
   </div>
 </div>
 
@@ -637,13 +429,13 @@ animation: toastAnim 2.5s ease forwards;
     <div class="nav-icon">◈</div>
     <span data-i18n="wallet">Wallet</span>
   </div>
-  <div class="nav-item" onclick="showScreen('nomad',this)">
-    <div class="nav-icon">⬡</div>
-    NOMAD
+  <div class="nav-item" onclick="openModal('receive')">
+    <div class="nav-icon">↙</div>
+    <span data-i18n="receive">Receive</span>
   </div>
-  <div class="nav-item" onclick="showScreen('community',this)">
-    <div class="nav-icon">◎</div>
-    <span data-i18n="network">Network</span>
+  <div class="nav-item" onclick="openModal('swap')">
+    <div class="nav-icon">⇄</div>
+    <span data-i18n="swap">Swap</span>
   </div>
 </div>
 
@@ -866,35 +658,20 @@ const NOMAD_CONTRACT = 'EQCUm1TkLN1CYIr43xGqZ_KYSJEcAD05xllkvGGtB-8J_w24';
 
 const i18n = {
   en: {
-    connectSub: 'A financial tool for people without borders',
-    f1title: 'P2P transfers', f1desc: 'By @username, no banks, no borders',
-    f2title: 'NOMAD token', f2desc: 'Currency of the nomad community on TON',
-    f3title: 'No server', f3desc: 'Everything on the TON blockchain',
+    connectSub: 'A minimal TON wallet interface.',
     connectBtn: 'CONNECT WALLET',
     totalBalance: '// Total balance',
     send: 'Send', receive: 'Receive', swap: 'Swap',
     history: '// History',
-    myBalance: 'My balance', price: 'Price',
-    howToEarn: '// How to earn',
-    onboard: 'Onboarding', onboardDesc: 'First connection',
-    referral: 'Referral', referralDesc: 'Per invited nomad',
-    p2pActivity: 'P2P activity', p2pDesc: 'Per transfer',
-    merchant: 'Merchant discount', merchantDesc: 'Pay in NOMAD',
-    refProgram: '📡 Referral Program',
-    refDesc: 'Invite nomads — earn NOMAD tokens. Your referrals also get a bonus on connection.',
-    copyLink: 'COPY LINK',
-    topNomads: '// Top Nomads',
-    wallet: 'Wallet', network: 'Network',
+    wallet: 'Wallet',
     recipient: 'Recipient (@username or address)',
     amount: 'Amount', confirmWallet: 'CONFIRM IN WALLET',
     cancel: 'cancel', close: 'close',
     connectFirst: 'Connect wallet to get address',
     copyAddress: 'COPY ADDRESS',
     youSend: 'You send', youGet: 'You get (≈)', swapBtn: 'SWAP',
-    toastWelcome: '⬡ +100 NOMAD — welcome!',
-    toastCopied: 'Link copied!',
+    nomad: 'NOMAD',
     toastAddrCopied: 'Address copied!',
-    toastContractCopied: 'Contract copied!',
     toastFill: 'Fill all fields',
     toastInvalidAddress: 'Invalid address',
     toastNoTon: 'Not enough TON',
@@ -904,35 +681,20 @@ const i18n = {
     toastAmount: 'Enter amount',
   },
   ru: {
-    connectSub: 'Финансовый инструмент для людей без границ',
-    f1title: 'P2P переводы', f1desc: 'По @username, без банков и границ',
-    f2title: 'NOMAD токен', f2desc: 'Валюта сообщества кочевников на TON',
-    f3title: 'Без сервера', f3desc: 'Всё на блокчейне TON',
+    connectSub: 'Минималистичный TON кошелёк.',
     connectBtn: 'ПОДКЛЮЧИТЬ КОШЕЛЁК',
     totalBalance: '// Общий баланс',
     send: 'Отправить', receive: 'Получить', swap: 'Обмен',
     history: '// История',
-    myBalance: 'Мой баланс', price: 'Цена',
-    howToEarn: '// Как получить',
-    onboard: 'Онбординг', onboardDesc: 'За первое подключение',
-    referral: 'Реферал', referralDesc: 'За каждого кочевника',
-    p2pActivity: 'P2P активность', p2pDesc: 'За каждый перевод',
-    merchant: 'Merchant скидка', merchantDesc: 'Оплата в NOMAD',
-    refProgram: '📡 Реферальная программа',
-    refDesc: 'Приглашай кочевников — получай NOMAD. Рефералы тоже получают бонус.',
-    copyLink: 'СКОПИРОВАТЬ ССЫЛКУ',
-    topNomads: '// Топ кочевников',
-    wallet: 'Кошелёк', network: 'Сеть',
+    wallet: 'Кошелёк',
     recipient: 'Получатель (@username или адрес)',
     amount: 'Сумма', confirmWallet: 'ПОДТВЕРДИТЬ В КОШЕЛЬКЕ',
     cancel: 'отмена', close: 'закрыть',
     connectFirst: 'Подключите кошелёк для получения адреса',
     copyAddress: 'СКОПИРОВАТЬ АДРЕС',
     youSend: 'Отдаю', youGet: 'Получаю (≈)', swapBtn: 'ОБМЕНЯТЬ',
-    toastWelcome: '⬡ +100 NOMAD — добро пожаловать!',
-    toastCopied: 'Ссылка скопирована!',
+    nomad: 'NOMAD',
     toastAddrCopied: 'Адрес скопирован!',
-    toastContractCopied: 'Контракт скопирован!',
     toastFill: 'Заполни все поля',
     toastInvalidAddress: 'Некорректный адрес',
     toastNoTon: 'Недостаточно TON',
@@ -1069,18 +831,8 @@ function onWalletConnected(addr) {
   loadWalletState();
   startBalanceSync();
   renderTx();
-  renderCommunity();
-  updateRefLink(addr);
   if (walletNetworkBlocked) {
     showToast('Testnet wallet connected - sending disabled');
-  }
-  if (!localStorage.getItem('nomad_onboard')) {
-    localStorage.setItem('nomad_onboard', '1');
-    let s = getWState();
-    s.demoBonusNomad = (Number(s.demoBonusNomad) || 0) + 100;
-    s.nomad += 100;
-    saveWState(s);
-    setTimeout(() => showToast(t('toastWelcome')), 800);
   }
   tg?.HapticFeedback?.notificationOccurred('success');
 }
@@ -1103,8 +855,7 @@ async function syncWalletFromChain() {
     const onChain = await window.walletService.syncWalletState(walletAddress, NOMAD_CONTRACT);
     const s = getWState();
     if (Number.isFinite(onChain.ton)) s.ton = onChain.ton;
-    const demoBonus = Number(s.demoBonusNomad || 0);
-    if (Number.isFinite(onChain.nomad)) s.nomad = onChain.nomad + demoBonus;
+    if (Number.isFinite(onChain.nomad)) s.nomad = onChain.nomad;
     saveWState(s);
     updateBalanceUI(s);
   } catch (e) {
@@ -1143,19 +894,25 @@ function updateBalanceUI(s) {
 }
 
 // ===== TX =====
-const MOCK_TXS = [
-  { avatar:'🌏', name:'@bangkok_dao', date:'2h ago', amount:'+2.5 TON', type:'in' },
-  { avatar:'☕', name:'@coffee_nomad', date:'yesterday', amount:'-0.8 TON', type:'out' },
-  { avatar:'⬡', name:'Earn reward', date:'3 days ago', amount:'+50 NOMAD', type:'in' },
-  { avatar:'🔄', name:'Swap TON→NOMAD', date:'5 days ago', amount:'+238 NOMAD', type:'in' },
-];
-
 function renderTx() {
   const s = getWState();
-  const allTxs = [...(s.txs || []).slice().reverse(), ...MOCK_TXS];
   const list = document.getElementById('txList');
   list.innerHTML = '';
-  allTxs.slice(0,8).forEach(tx => {
+  const txs = (s.txs || []).slice().reverse();
+  if (!txs.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tx-item';
+    empty.innerHTML = `
+      <div class="tx-avatar">—</div>
+      <div class="tx-info">
+        <div class="tx-name">No transactions yet</div>
+        <div class="tx-date">Your activity will appear here</div>
+      </div>
+    `;
+    list.appendChild(empty);
+    return;
+  }
+  txs.slice(0,8).forEach(tx => {
     const item = document.createElement('div');
     item.className = 'tx-item';
     item.innerHTML = `
@@ -1170,53 +927,9 @@ function renderTx() {
   });
 }
 
-// ===== COMMUNITY =====
-const MOCK_COMMUNITY = [
-  { name:'@zero_borders', nomad:4821, flag:'🌏' },
-  { name:'@digital_nomad_x', nomad:3200, flag:'🇹🇭' },
-  { name:'@freeroam', nomad:2840, flag:'🇵🇹' },
-  { name:'@nomad_lia', nomad:2100, flag:'🌊' },
-  { name:'@stateless_dev', nomad:1540, flag:'🌐' },
-];
-
-function renderCommunity() {
-  const medals = ['🥇','🥈','🥉','◎','◎'];
-  const list = document.getElementById('communityList');
-  list.innerHTML = '';
-  MOCK_COMMUNITY.forEach((u,i) => {
-    const item = document.createElement('div');
-    item.className = 'tx-item';
-    item.innerHTML = `
-      <div class="tx-avatar">${u.flag}</div>
-      <div class="tx-info">
-        <div class="tx-name">${medals[i]} ${u.name}</div>
-        <div class="tx-date">Nomad since 2024</div>
-      </div>
-      <div class="tx-amount in">${u.nomad} ⬡</div>
-    `;
-    list.appendChild(item);
-  });
-}
-
-function updateRefLink(addr) {
-  const uid = tg?.initDataUnsafe?.user?.id || addr.slice(3,9);
-  document.getElementById('refLink').textContent = `t.me/nomad_wallet_bot?start=${uid}`;
-}
-
-function copyRef() {
-  navigator.clipboard?.writeText(document.getElementById('refLink').textContent).catch(()=>{});
-  showToast(t('toastCopied'));
-  tg?.HapticFeedback?.impactOccurred('light');
-}
-
 function copyAddress() {
   navigator.clipboard?.writeText(document.getElementById('receiveAddr').textContent).catch(()=>{});
   showToast(t('toastAddrCopied'));
-}
-
-function copyContract() {
-  navigator.clipboard?.writeText(NOMAD_CONTRACT).catch(()=>{});
-  showToast(t('toastContractCopied'));
 }
 
 // ===== SEND =====
