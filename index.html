@@ -8,6 +8,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@tonconnect/ui@2.0.0/dist/tonconnect-ui.min.js"></script>
 <script src="https://unpkg.com/ton-core@0.53.0/dist/ton-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -495,7 +496,7 @@ animation: toastAnim 2.5s ease forwards;
   </div>
 </div>
 
-<button class="btn-connect" onclick="connectWallet()" data-i18n="connectBtn">
+<button class="btn-connect" id="connectBtn" onclick="connectWallet()" data-i18n="connectBtn">
   CONNECT WALLET
 </button>
 
@@ -666,7 +667,7 @@ animation: toastAnim 2.5s ease forwards;
         <option value="nomad">NOMAD ⬡</option>
       </select>
     </div>
-    <button class="btn-primary" onclick="doSend()" data-i18n="confirmWallet">CONFIRM IN WALLET</button>
+    <button class="btn-primary" id="sendConfirmBtn" onclick="doSend()" data-i18n="confirmWallet">CONFIRM IN WALLET</button>
     <button class="btn-cancel" onclick="closeModal('send')" data-i18n="cancel">cancel</button>
   </div>
 </div>
@@ -678,9 +679,7 @@ animation: toastAnim 2.5s ease forwards;
     <div class="modal-handle"></div>
     <div class="modal-title" data-i18n="receive">↙ Receive</div>
     <div class="qr-container">
-      <div class="qr-box">
-        <canvas id="qrCanvas" width="168" height="168"></canvas>
-      </div>
+      <div class="qr-box" id="qrCanvas"></div>
       <div class="qr-address" id="receiveAddr" data-i18n="connectFirst">Connect wallet to get address</div>
       <button class="btn-small" onclick="copyAddress()" data-i18n="copyAddress">COPY ADDRESS</button>
     </div>
@@ -706,7 +705,7 @@ animation: toastAnim 2.5s ease forwards;
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:14px;letter-spacing:1px">
       1 TON ≈ 238 NOMAD · via STON.fi
     </div>
-    <button class="btn-primary" onclick="doSwap()" data-i18n="swapBtn">SWAP</button>
+    <button class="btn-primary" id="swapBtn" onclick="doSwap()" data-i18n="swapBtn">SWAP</button>
     <button class="btn-cancel" onclick="closeModal('swap')" data-i18n="cancel">cancel</button>
   </div>
 </div>
@@ -747,6 +746,7 @@ const i18n = {
     toastAddrCopied: 'Address copied!',
     toastContractCopied: 'Contract copied!',
     toastFill: 'Fill all fields',
+    toastInvalidAddress: 'Invalid address',
     toastNoTon: 'Not enough TON',
     toastNoNomad: 'Not enough NOMAD',
     toastSent: '✓ Sent + 5 ⬡ for activity',
@@ -784,6 +784,7 @@ const i18n = {
     toastAddrCopied: 'Адрес скопирован!',
     toastContractCopied: 'Контракт скопирован!',
     toastFill: 'Заполни все поля',
+    toastInvalidAddress: 'Некорректный адрес',
     toastNoTon: 'Недостаточно TON',
     toastNoNomad: 'Недостаточно NOMAD',
     toastSent: '✓ Отправлено + 5 ⬡ за активность',
@@ -795,6 +796,33 @@ const i18n = {
 let lang = localStorage.getItem('nomad_lang') || 'en';
 
 function t(key) { return i18n[lang][key] || key; }
+
+function setButtonLoading(buttonId, loading, loadingText = '...') {
+  const btn = document.getElementById(buttonId);
+  if (!btn) return;
+  if (loading) {
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = loadingText;
+    return;
+  }
+  btn.disabled = false;
+  if (btn.dataset.originalText) {
+    btn.textContent = btn.dataset.originalText;
+    delete btn.dataset.originalText;
+  }
+}
+
+function validateTonAddress(input) {
+  const value = (input || '').trim();
+  if (!value) throw new Error(t('toastInvalidAddress'));
+  if (!Address) throw new Error('tonCore not ready');
+  try {
+    return Address.parse(value).toString();
+  } catch {
+    throw new Error(t('toastInvalidAddress'));
+  }
+}
 
 function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -852,7 +880,7 @@ async function getJettonWalletAddress(ownerAddress) {
 }
 
 function buildJettonTransferPayload({ amount, toAddress }) {
-  if (!Address) throw new Error('tonCore not ready');
+  if (!Address || !beginCell || !toNano) throw new Error('tonCore not ready');
   return beginCell()
     .storeUint(0xf8a7ea5, 32) // op code transfer
     .storeUint(0, 64) // query id
@@ -890,12 +918,15 @@ async function initTonConnect() {
 }
 
 async function connectWallet() {
+  setButtonLoading('connectBtn', true);
   if (!tonConnectUI) {
     showToast('TON Connect not available');
+    setButtonLoading('connectBtn', false);
     return;
   }
   try { await tonConnectUI.openModal(); }
-  catch(e) { showToast('TON Connect not available'); }
+  catch(e) { showToast(e?.message || 'TON Connect not available'); }
+  finally { setButtonLoading('connectBtn', false); }
 }
 
 function demoConnect() {
@@ -1032,130 +1063,145 @@ function copyContract() {
 
 // ===== SEND =====
 async function doSend() {
-  const to = document.getElementById('sendTo').value.trim();
-  const amount = parseFloat(document.getElementById('sendAmount').value);
-  const token = document.getElementById('sendToken').value;
+  setButtonLoading('sendConfirmBtn', true);
+  try {
+    if (!Address || !beginCell || !toNano) {
+      showToast('tonCore not ready');
+      return;
+    }
 
-  if (!to || !amount || amount <= 0) {
-    showToast(t('toastFill'));
-    return;
-  }
+    const to = document.getElementById('sendTo').value.trim();
+    const amount = parseFloat(document.getElementById('sendAmount').value);
+    const token = document.getElementById('sendToken').value;
 
-  const s = getWState();
-  if (!walletAddress) {
-    showToast('Wallet not connected');
-    return;
-  }
+    if (!to || !amount || amount <= 0) {
+      showToast(t('toastFill'));
+      return;
+    }
 
-  // === REAL TON SEND ===
-  if (token === 'ton' && tonConnectUI && walletAddress) {
+    const s = getWState();
+    if (!walletAddress) {
+      showToast('Wallet not connected');
+      return;
+    }
+
+    let resolvedTo;
     try {
-      await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 60,
-        messages: [
-          {
-            address: to,
-            amount: (amount * 1e9).toString()
-          }
-        ]
-      });
+      resolvedTo = validateTonAddress(to);
+    } catch (e) {
+      showToast(e?.message || t('toastInvalidAddress'));
+      return;
+    }
 
-      // update local UI after success
-      s.ton = +(s.ton - amount).toFixed(2);
+    // === REAL TON SEND ===
+    if (token === 'ton' && tonConnectUI && walletAddress) {
+      try {
+        await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 60,
+          messages: [
+            {
+              address: resolvedTo,
+              amount: toNano(amount.toString()).toString()
+            }
+          ]
+        });
+
+        // update local UI after success
+        s.ton = +(s.ton - amount).toFixed(2);
+        s.nomad += 5;
+
+        s.txs = s.txs || [];
+        s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${amount} TON`, type:'out' });
+
+        saveWState(s);
+        renderTx();
+        closeModal('send');
+
+        showToast(t('toastSent'));
+        tg?.HapticFeedback?.notificationOccurred('success');
+
+      } catch (e) {
+        console.log(e);
+        showToast(e?.message || 'Transaction failed');
+      }
+
+    } else {
+      // === REAL JETTON (NOMAD) LOGIC ===
+      if (token === 'nomad' && tonConnectUI && walletAddress) {
+        try {
+          // 1. build payload for the recipient owner address
+          const payload = buildJettonTransferPayload({
+            amount,
+            toAddress: resolvedTo
+          });
+
+          // 2. send transaction to YOUR jetton wallet
+          const myJettonWallet = await getJettonWalletAddress(walletAddress);
+
+          await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 60,
+            messages: [
+              {
+                address: myJettonWallet,
+                amount: toNano('0.05').toString(),
+                payload
+              }
+            ]
+          });
+
+          // update UI after success
+          s.nomad -= Math.floor(amount);
+          s.txs = s.txs || [];
+          s.txs.push({ avatar:'⬡', name:to, date:'just now', amount:`-${amount} NOMAD`, type:'out' });
+
+          saveWState(s);
+          renderTx();
+          closeModal('send');
+
+          showToast('NOMAD sent');
+          tg?.HapticFeedback?.notificationOccurred('success');
+
+        } catch (e) {
+          console.log(e);
+          showToast(e?.message || 'Jetton transfer failed');
+        }
+
+        document.getElementById('sendTo').value = '';
+        document.getElementById('sendAmount').value = '';
+        return;
+      }
+
+      // fallback local (if TON not connected)
+      if (token === 'ton' && s.ton < amount) {
+        showToast(t('toastNoTon'));
+        return;
+      }
+      if (token === 'nomad' && s.nomad < amount) {
+        showToast(t('toastNoNomad'));
+        return;
+      }
+
+      if (token === 'ton') s.ton = +(s.ton - amount).toFixed(2);
+      else s.nomad -= Math.floor(amount);
+
       s.nomad += 5;
 
+      const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
       s.txs = s.txs || [];
-      s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${amount} TON`, type:'out' });
+      s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${label}`, type:'out' });
 
       saveWState(s);
       renderTx();
       closeModal('send');
 
       showToast(t('toastSent'));
-      tg?.HapticFeedback?.notificationOccurred('success');
-
-    } catch (e) {
-      console.log(e);
-      showToast('Transaction rejected');
     }
 
-  } else {
-    // === REAL JETTON (NOMAD) LOGIC ===
-    if (token === 'nomad' && tonConnectUI && walletAddress) {
-      try {
-        // 1. resolve recipient jetton wallet
-        const jettonWallet = await getJettonWalletAddress(to);
-
-        // 2. build payload
-        const payload = buildJettonTransferPayload({
-          amount,
-          toAddress: to
-        });
-
-        // 3. send transaction to YOUR jetton wallet
-        const myJettonWallet = await getJettonWalletAddress(walletAddress);
-
-        await tonConnectUI.sendTransaction({
-          validUntil: Math.floor(Date.now() / 1000) + 60,
-          messages: [
-            {
-              address: myJettonWallet,
-              amount: toNano('0.05').toString(),
-              payload
-            }
-          ]
-        });
-
-        // update UI after success
-        s.nomad -= Math.floor(amount);
-        s.txs = s.txs || [];
-        s.txs.push({ avatar:'⬡', name:to, date:'just now', amount:`-${amount} NOMAD`, type:'out' });
-
-        saveWState(s);
-        renderTx();
-        closeModal('send');
-
-        showToast('NOMAD sent');
-        tg?.HapticFeedback?.notificationOccurred('success');
-
-      } catch (e) {
-        console.log(e);
-        showToast('Jetton transfer failed');
-      }
-
-      document.getElementById('sendTo').value = '';
-      document.getElementById('sendAmount').value = '';
-      return;
-    }
-
-    // fallback local (if TON not connected)
-    if (token === 'ton' && s.ton < amount) {
-      showToast(t('toastNoTon'));
-      return;
-    }
-    if (token === 'nomad' && s.nomad < amount) {
-      showToast(t('toastNoNomad'));
-      return;
-    }
-
-    if (token === 'ton') s.ton = +(s.ton - amount).toFixed(2);
-    else s.nomad -= Math.floor(amount);
-
-    s.nomad += 5;
-
-    const label = token === 'ton' ? `${amount} TON` : `${amount} NOMAD`;
-    s.txs = s.txs || [];
-    s.txs.push({ avatar:'↗', name:to, date:'just now', amount:`-${label}`, type:'out' });
-
-    saveWState(s);
-    renderTx();
-    closeModal('send');
-
-    showToast(t('toastSent'));
+    document.getElementById('sendTo').value = '';
+    document.getElementById('sendAmount').value = '';
+  } finally {
+    setButtonLoading('sendConfirmBtn', false);
   }
-
-  document.getElementById('sendTo').value = '';
-  document.getElementById('sendAmount').value = '';
 }
 
 // ===== SWAP =====
@@ -1164,54 +1210,42 @@ document.getElementById('swapFrom').addEventListener('input', e => {
 });
 
 function doSwap() {
-  const from = parseFloat(document.getElementById('swapFrom').value);
-  if (!from || from <= 0) { showToast(t('toastAmount')); return; }
-  const s = getWState();
-  if (s.ton < from) { showToast(t('toastNoTon')); return; }
-  s.ton = +(s.ton - from).toFixed(2);
-  s.nomad += Math.floor(from * 238);
-  s.txs = s.txs || [];
-  s.txs.push({ avatar:'⇄', name:'Swap TON→NOMAD', date:'just now', amount:`+${Math.floor(from*238)} NOMAD`, type:'in' });
-  saveWState(s); renderTx(); closeModal('swap');
-  showToast(t('toastSwapped'));
-  document.getElementById('swapFrom').value = '';
-  document.getElementById('swapTo').value = '';
+  setButtonLoading('swapBtn', true);
+  try {
+    const from = parseFloat(document.getElementById('swapFrom').value);
+    if (!from || from <= 0) { showToast(t('toastAmount')); return; }
+    const s = getWState();
+    if (s.ton < from) { showToast(t('toastNoTon')); return; }
+    s.ton = +(s.ton - from).toFixed(2);
+    s.nomad += Math.floor(from * 238);
+    s.txs = s.txs || [];
+    s.txs.push({ avatar:'⇄', name:'Swap TON→NOMAD', date:'just now', amount:`+${Math.floor(from*238)} NOMAD`, type:'in' });
+    saveWState(s); renderTx(); closeModal('swap');
+    showToast(t('toastSwapped'));
+    document.getElementById('swapFrom').value = '';
+    document.getElementById('swapTo').value = '';
+  } finally {
+    setButtonLoading('swapBtn', false);
+  }
 }
 
 // ===== QR =====
 function drawQR(text) {
   const canvas = document.getElementById('qrCanvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'white'; ctx.fillRect(0,0,168,168);
-  ctx.fillStyle = '#0c0c0f';
-  const cell = 168/21;
-  const p = [
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,0],
-    [1,0,0,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0,0],
-    [1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,1,1,0,1,0,0],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0,0],
-    [1,0,0,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0],
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,0],
-    [0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0],
-    [1,0,1,1,0,1,1,1,0,0,1,0,1,1,0,1,1,0,1,1,0],
-    [0,1,0,0,1,0,0,0,1,1,0,1,0,0,1,0,0,1,0,0,1],
-    [1,1,0,1,0,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0],
-    [0,0,1,0,1,1,0,1,0,1,0,1,0,1,1,0,1,0,1,0,1],
-    [1,0,1,0,0,1,1,0,1,0,0,1,1,1,0,0,1,0,0,1,0],
-    [0,0,0,0,0,0,0,0,1,1,0,1,0,0,1,1,0,1,0,0,1],
-    [1,1,1,1,1,1,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
-    [1,0,0,0,0,0,1,0,1,1,0,1,0,1,0,1,0,1,1,0,1],
-    [1,0,1,1,1,0,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
-    [1,0,1,1,1,0,1,0,1,1,0,1,0,1,0,1,0,1,1,0,1],
-    [1,0,1,1,1,0,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
-    [1,0,0,0,0,0,1,0,1,1,0,1,0,1,0,1,0,1,1,0,1],
-    [1,1,1,1,1,1,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
-  ];
-  p.forEach((row,y) => row.forEach((v,x) => {
-    if (v) ctx.fillRect(x*cell, y*cell, cell-0.5, cell-0.5);
-  }));
+  canvas.innerHTML = '';
+  if (typeof QRCode === 'undefined') {
+    canvas.textContent = text;
+    return;
+  }
+  new QRCode(canvas, {
+    text,
+    width: 168,
+    height: 168,
+    colorDark: '#0c0c0f',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
 }
 
 // ===== SCREENS =====
