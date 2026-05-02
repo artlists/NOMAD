@@ -1009,25 +1009,15 @@ let balanceSyncTimer = null;
 
 async function initTonConnect() {
   try {
-    let core = null;
-    if (window.walletService?.waitForTonCore) {
-      try {
-        core = await window.walletService.waitForTonCore();
-      } catch (e) {
-        console.warn('tonCore not ready in time');
-        return;
-      }
-    }
-    if (!core) {
-      console.warn('tonCore not ready in time');
-      return;
-    }
-    const TonUI = window.TON_CONNECT_UI || window.TonConnectUI || window.tonconnectui;
-    if (!TonUI) {
+    const TonConnectUIClass =
+      window.TON_CONNECT_UI?.TonConnectUI ||
+      window.TonConnectUI ||
+      window.tonconnectui?.TonConnectUI;
+    if (!TonConnectUIClass) {
       console.warn('TON Connect not loaded');
       return;
     }
-    tonConnectUI = new TonUI.TonConnectUI({
+    tonConnectUI = new TonConnectUIClass({
       manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json'
     });
     tonConnectUI.onStatusChange(wallet => {
@@ -1051,6 +1041,9 @@ async function initTonConnect() {
 
 async function connectWallet() {
   setButtonLoading('connectBtn', true);
+  if (!tonConnectUI) {
+    await initTonConnect();
+  }
   if (!tonConnectUI) {
     console.warn('TON UI instance missing');
     showToast('TON Connect not available');
