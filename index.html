@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NOMAD</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+<script src="https://unpkg.com/@tonconnect/ui@2.0.0/dist/tonconnect-ui.min.js"></script>
 <script src="https://unpkg.com/ton-core@0.53.0/dist/ton-core.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -67,7 +67,7 @@ min-height: 100vh;
 padding: 0 20px;
 display: flex; align-items: center; justify-content: space-between;
 border-bottom: 1px solid var(--border);
-position: fixed; top: 80px; left: 50%; transform: translateX(-50%); width: 100%; z-index: 50;
+position: fixed; top: 90px; left: 50%; transform: translateX(-50%); width: 100%; z-index: 50;
 background: rgba(12,12,15,0.97); height: 88px;
 backdrop-filter: blur(20px);
 }
@@ -812,25 +812,47 @@ function toggleLang() {
 }
 
 // ===== TELEGRAM =====
-const tg = window.Telegram?.WebApp ?? null;
+const tg = (window.Telegram && window.Telegram.WebApp) 
+  ? window.Telegram.WebApp 
+  : null;
 if (tg) { tg.ready(); tg.expand(); }
 
 // ===== TON CORE HELPERS =====
+const tonCore = window.tonCore || {};
 const { Address, beginCell, toNano } = tonCore;
+if (!Address) {
+  console.error('tonCore not loaded');
+}
 
 async function getJettonWalletAddress(ownerAddress) {
-  // call TON API (toncenter lite) to resolve jetton wallet
-  const res = await fetch(`https://toncenter.com/api/v2/runGetMethod?address=${NOMAD_CONTRACT}&method=get_wallet_address&stack=[[\
-    \"tvm.Slice\",\"${ownerAddress}\"\
-  ]]`);
-  const data = await res.json();
-  if (!data.result) throw new Error('Failed to get jetton wallet');
-
-  const raw = data.result.stack[0][1].bytes;
-  return Address.parseRaw(raw).toString();
+  try {
+    const res = await fetch('https://toncenter.com/api/v2/runGetMethod', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        address: NOMAD_CONTRACT,
+        method: 'get_wallet_address',
+        stack: [
+          ["tvm.Slice", ownerAddress]
+        ]
+      })
+    });
+    const data = await res.json();
+    if (!data.result || !data.result.stack) {
+      throw new Error('Invalid response');
+    }
+    const raw = data.result.stack[0][1].bytes;
+    return Address.parseRaw(raw).toString();
+  } catch (e) {
+    console.error('Jetton wallet error:', e);
+    throw e;
+  }
 }
 
 function buildJettonTransferPayload({ amount, toAddress }) {
+  if (!Address) throw new Error('tonCore not ready');
   return beginCell()
     .storeUint(0xf8a7ea5, 32) // op code transfer
     .storeUint(0, 64) // query id
@@ -851,9 +873,12 @@ let walletAddress = null;
 
 async function initTonConnect() {
   try {
+    if (!window.TON_CONNECT_UI) {
+      console.warn('TON Connect not loaded');
+      return;
+    }
     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-      manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json',
-      buttonRootId: null
+      manifestUrl: 'https://artlists.github.io/NOMAD/tonconnect-manifest.json'
     });
     tonConnectUI.onStatusChange(wallet => {
       if (wallet) { walletAddress = wallet.account.address; onWalletConnected(walletAddress); }
@@ -861,13 +886,16 @@ async function initTonConnect() {
     });
     const wallet = tonConnectUI.wallet;
     if (wallet) { walletAddress = wallet.account.address; onWalletConnected(walletAddress); }
-  } catch(e) { console.log('TON Connect:', e); }
+  } catch(e) { console.error('TON Connect init error:', e); }
 }
 
 async function connectWallet() {
-  if (!tonConnectUI) { demoConnect(); return; }
+  if (!tonConnectUI) {
+    showToast('TON Connect not available');
+    return;
+  }
   try { await tonConnectUI.openModal(); }
-  catch(e) { demoConnect(); }
+  catch(e) { showToast('TON Connect not available'); }
 }
 
 function demoConnect() {
@@ -1014,6 +1042,10 @@ async function doSend() {
   }
 
   const s = getWState();
+  if (!walletAddress) {
+    showToast('Wallet not connected');
+    return;
+  }
 
   // === REAL TON SEND ===
   if (token === 'ton' && tonConnectUI && walletAddress) {
